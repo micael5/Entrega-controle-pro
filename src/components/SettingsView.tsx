@@ -5,8 +5,9 @@
 
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
-import { Settings, Save, Trash2, Calendar, DollarSign, RefreshCw, AlertTriangle, Plus, CheckCircle2, ChevronRight, Smartphone, Chrome, CalendarClock, Coffee, AlertCircle } from 'lucide-react';
+import { Settings, Save, Trash2, Calendar, DollarSign, RefreshCw, AlertTriangle, Plus, CheckCircle2, ChevronRight, Smartphone, Chrome, CalendarClock, Coffee, AlertCircle, Bell, BellRing } from 'lucide-react';
 import { AppState, Expense, ExtraGoal } from '../types';
+import { isNotificationSupported, getNotificationPermission, requestNotificationPermission, triggerLocalNotification } from '../utils/notifications';
 import { CalendarModal } from './CalendarModal';
 import { transmitWidgetData } from '../utils/widgetSync';
 
@@ -40,6 +41,42 @@ export function SettingsView({
   // Config state
   const [ifoodRate, setIfoodRate] = useState(state.config.ifoodValue.toString());
   const [quitaRate, setQuitaRate] = useState(state.config.quitaValue.toString());
+  
+  // Notification states
+  const [notifSupported] = useState(() => isNotificationSupported());
+  const [notifPermission, setNotifPermission] = useState(() => getNotificationPermission());
+  const [isTestingNotif, setIsTestingNotif] = useState(false);
+
+  const handleRequestNotifPermission = async () => {
+    setActionError('');
+    setActionSuccess('');
+    const res = await requestNotificationPermission();
+    setNotifPermission(res);
+    if (res === 'granted') {
+      setActionSuccess('🔔 Notificações ativadas com sucesso! Você receberá alertas do app!');
+    } else if (res === 'denied') {
+      setActionError('❌ Permissão de notificação negada. Ative nas configurações do Chrome/Celular para receber alertas.');
+    }
+  };
+
+  const handleSendTestNotification = async () => {
+    if (notifPermission !== 'granted') {
+      setActionError('⚠️ Dê permissão primeiro clicando no botão "Ativar Notificações".');
+      return;
+    }
+    setIsTestingNotif(true);
+    try {
+      await triggerLocalNotification(
+        '🔔 Teste de Alerta Real!',
+        'Isso é um exemplo de como você será alertado ao bater a meta ou precisar de manutenção! 🚀'
+      );
+      setActionSuccess('📲 Notificação de teste enviada! Verifique a barra de status do seu celular.');
+    } catch (err) {
+      setActionError('Erro ao enviar notificação de teste.');
+    } finally {
+      setIsTestingNotif(false);
+    }
+  };
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const [isUpdatingWidgetInSettings, setIsUpdatingWidgetInSettings] = useState(false);
   const [widgetSyncTimeStr, setWidgetSyncTimeStr] = useState('');
@@ -672,57 +709,104 @@ export function SettingsView({
         )}
       </div>
 
-      {/* SECTION 4: AUTOMATED CELLPHONE INSTALLATION & DIRECT CHROME LAUNCH */}
-      <div id="installation_direct_access" className="bg-white rounded-3xl p-6 shadow-xs border border-slate-100 space-y-4">
+      {/* SECTION 4: NOTIFICAÇÕES E ALERTAS DE METAS */}
+      <div id="notifications_settings_block" className="bg-white rounded-3xl p-6 shadow-xs border border-slate-100 space-y-4">
         <div className="flex items-center gap-2 pb-2 border-b border-slate-50">
-          <Smartphone size={20} className="text-brand-500" />
-          <h2 className="font-bold text-slate-850 text-base">Instalação e Acesso Direto</h2>
+          <Bell size={20} className="text-brand-500" />
+          <h2 className="font-bold text-slate-850 text-base">🔔 ALERTAS E NOTIFICAÇÕES</h2>
         </div>
         <p className="text-slate-500 text-xs leading-relaxed">
-          Instale o aplicativo diretamente em seu celular ou execute em uma janela limpa, sem as telas de desenvolvimento do Google AI Studio.
+          Ative as notificações push e alertas de sistema para receber avisos imediatos no seu celular ao bater a sua meta diária de ganhos ou quando a manutenção da bicicleta estiver próxima!
         </p>
 
-        <div className="grid grid-cols-1 gap-4">
-          
-          {/* Action 1: Abrir Aplicativo Direto no Chrome (Top) */}
-          <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4 flex flex-col justify-between space-y-3">
-            <div>
-              <h3 className="font-bold text-xs uppercase text-slate-700 tracking-wider">
-                Acesso Direto pelo Chrome
-              </h3>
-              <p className="text-slate-500 text-[11px] leading-relaxed mt-1">
-                Abra instantaneamente o aplicativo no navegador Google Chrome como uma aplicação independente e pronta para uso profissional.
-              </p>
-            </div>
-            
-            <button
-              onClick={handleOpenDirectChrome}
-              className="w-full bg-brand-500 hover:bg-brand-600 text-white font-bold text-xs py-2.5 rounded-xl cursor-pointer transition-all flex items-center justify-center gap-1.5 shadow-sm shadow-brand-500/10"
-            >
-              <Chrome size={14} /> Abrir Aplicativo Direto no Chrome
-            </button>
+        {!notifSupported ? (
+          <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 text-xs text-amber-800">
+            ⚠️ Atenção: Notificações nativas não são suportadas neste navegador/sistema. Use o Google Chrome para obter suporte completo.
           </div>
-
-          {/* Action 2: Instalar / Atualizar Automaticamente no Celular (Below) */}
-          <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4 flex flex-col justify-between space-y-3">
-            <div>
-              <h3 className="font-bold text-xs uppercase text-slate-700 tracking-wider">
-                Instalação Automática no Celular
-              </h3>
-              <p className="text-slate-500 text-[11px] leading-relaxed mt-1">
-                Gera e instala o aplicativo nativo completo no seu celular, com todas as funções e banco de dados, pronto para usar fora do navegador.
-              </p>
+        ) : (
+          <div className="space-y-3 pt-1">
+            <div className="flex items-center justify-between bg-slate-50/50 border border-slate-105 p-3 rounded-2xl">
+              <div>
+                <span className="text-[10px] uppercase font-extrabold text-slate-400 block tracking-wider">Status da Permissão</span>
+                <span className={`text-xs font-bold ${
+                  notifPermission === 'granted' ? 'text-emerald-600' : notifPermission === 'denied' ? 'text-red-500' : 'text-amber-500'
+                }`}>
+                  {notifPermission === 'granted' ? '🟢 PERMITIDO (Ativo)' : notifPermission === 'denied' ? '🔴 NEGADO' : '🟡 NÃO SOLICITADO'}
+                </span>
+              </div>
+              
+              {notifPermission !== 'granted' && (
+                <button
+                  onClick={handleRequestNotifPermission}
+                  className="bg-brand-500 hover:bg-brand-600 text-white font-bold text-xs px-4 py-2 rounded-xl transition-all shadow-sm cursor-pointer"
+                >
+                  Permitir Alertas
+                </button>
+              )}
             </div>
-            
-            <button
-              id="btn-instalar"
-              onClick={handleAutoReinstall}
-              className="w-full bg-orange-500 hover:bg-orange-600 text-white font-bold text-xs py-2.5 rounded-xl cursor-pointer transition-all flex items-center justify-center gap-1.5 shadow-sm shadow-orange-500/10"
-            >
-              <Smartphone size={14} /> 📲 Instalar / Atualizar Aplicativo Completo
-            </button>
-          </div>
 
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+              <div className="border border-slate-100 p-4 rounded-2xl space-y-2 bg-slate-50/30">
+                <div className="flex items-center gap-1.5 text-slate-800 font-bold text-xs uppercase tracking-wider">
+                  <CheckCircle2 size={14} className="text-emerald-500" /> Meta Diária
+                </div>
+                <p className="text-slate-500 text-[11px] leading-snug">
+                  Envia um aviso vibratório instantâneo assim que o valor total de entregas lançadas hoje atingir ou superar a meta diária calculada.
+                </p>
+              </div>
+
+              <div className="border border-slate-100 p-4 rounded-2xl space-y-2 bg-slate-50/30">
+                <div className="flex items-center gap-1.5 text-slate-800 font-bold text-xs uppercase tracking-wider">
+                  <AlertCircle size={14} className="text-orange-500" /> Limite de Manutenção
+                </div>
+                <p className="text-slate-500 text-[11px] leading-snug">
+                  Alerta no celular no momento em que você ultrapassar a kilometragem de rodagem recomendada pré-estabelecida no painel de percurso.
+                </p>
+              </div>
+            </div>
+
+            {notifPermission === 'granted' && (
+              <button
+                type="button"
+                onClick={handleSendTestNotification}
+                disabled={isTestingNotif}
+                className="w-full border shadow-xs border-slate-200 hover:bg-slate-50 text-slate-705 font-bold text-xs py-2.5 rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <BellRing size={14} className={isTestingNotif ? 'animate-bounce' : ''} />
+                {isTestingNotif ? 'Enviando Alerta...' : '📲 Testar Notificação de Alerta Real'}
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* SECTION 4: AUTOMATED CELLPHONE INSTALLATION */}
+      <div id="installation_direct_access" className="bg-white rounded-3xl p-6 shadow-xs border border-slate-100 space-y-4">
+        <div className="flex items-center gap-2 pb-2 border-b border-slate-50">
+          <Smartphone size={20} className="text-orange-500" />
+          <h2 className="font-bold text-slate-850 text-base">📲 INSTALAÇÃO E ATUALIZAÇÃO</h2>
+        </div>
+        <div className="bg-orange-50/50 border border-orange-100 rounded-2xl p-5 space-y-3">
+          <p className="font-semibold text-slate-800 text-sm">
+            Para instalar ou atualizar, abra esse link no Google Chrome:
+          </p>
+          <div className="bg-white border border-slate-200/60 rounded-xl px-4 py-2.5 flex items-center justify-between shadow-xs">
+            <span className="font-mono text-sm text-slate-700 select-all">https://controle-pro.vercel.app</span>
+            <span className="text-[10px] bg-emerald-50 text-emerald-700 font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">Recomendado</span>
+          </div>
+          <div className="text-slate-655 text-xs space-y-2 pt-1 font-medium">
+            <div className="flex items-start gap-2">
+              <span className="text-orange-500 font-bold">→</span>
+              <span>Clique nos 3 pontinhos <strong className="font-bold">⋮</strong> no canto superior direito</span>
+            </div>
+            <div className="flex items-start gap-2">
+              <span className="text-orange-500 font-bold">→</span>
+              <span>Escolha: <strong className="font-bold">"Instalar aplicativo"</strong> ou <strong className="font-bold">"Adicionar à tela inicial"</strong></span>
+            </div>
+          </div>
+          <div className="pt-2 border-t border-orange-100 flex items-center gap-1.5 text-emerald-850 font-semibold text-xs">
+            <span>✅ Pronto! O ícone aparecerá na tela.</span>
+          </div>
         </div>
       </div>
 

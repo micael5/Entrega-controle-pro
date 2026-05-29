@@ -10,6 +10,7 @@ import { Home, Receipt, Target, PiggyBank, Settings, Bike, MapPin } from 'lucide
 import { loadState, saveState } from './db';
 import { AppState, Delivery, Expense, ExtraGoal, Config, Trip } from './types';
 import { transmitWidgetData } from './utils/widgetSync';
+import { triggerLocalNotification } from './utils/notifications';
 
 // Importing our modular layout segments
 import { HomeView } from './components/HomeView';
@@ -30,6 +31,86 @@ export default function App() {
   useEffect(() => {
     saveState(state);
     transmitWidgetData(state);
+  }, [state]);
+
+  // Automatic notifications check for Daily Goal & Maintenance limits
+  useEffect(() => {
+    // Calculations representing today's gains and daily targets
+    const totalDespesas = state.expenses.reduce((sum, exp) => sum + exp.value, 0);
+    const baseDailyTarget = totalDespesas / 30;
+    const extraDailyTarget = state.extraGoals.reduce((sum, goal) => {
+      return sum + (goal.targetValue / Math.max(1, goal.daysLimit));
+    }, 0);
+    const totalDailyTarget = baseDailyTarget + extraDailyTarget;
+
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth(); // 0-11
+    const currentMonthStr = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}`;
+
+    const currentMonthRegs = (state.dayRegistrations || []).filter(reg => reg.date.startsWith(currentMonthStr));
+    const offDays = currentMonthRegs.filter(reg => reg.status === 'folga' || reg.status === 'falta');
+    const numOffDays = offDays.length;
+    const numWorkDays = Math.max(1, 30 - numOffDays);
+
+    const todayStrDate = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    const todayReg = (state.dayRegistrations || []).find(reg => reg.date === todayStrDate);
+    const todayStatus = todayReg ? todayReg.status : 'trabalho';
+    const isOffToday = todayStatus === 'folga' || todayStatus === 'falta';
+
+    let adjustedDailyTargetForWorkingDays = totalDailyTarget;
+    if (!state.keepOriginalGoalToggle) {
+      if (state.targetDivisionMode === 'concentrate') {
+        adjustedDailyTargetForWorkingDays = (totalDailyTarget * 30 / numWorkDays) * 1.25;
+      } else {
+        adjustedDailyTargetForWorkingDays = totalDailyTarget * 30 / numWorkDays;
+      }
+    }
+
+    const activeTodayTarget = isOffToday ? 0 : adjustedDailyTargetForWorkingDays;
+
+    const todayStr = new Date().toDateString();
+    const hojeGanhos = state.deliveries
+      .filter(del => {
+        const d = new Date(del.timestamp);
+        return d.toDateString() === todayStr;
+      })
+      .reduce((sum, del) => sum + del.value, 0);
+
+    // Filter this month's trips
+    const trips = state.trips || [];
+    const tripsThisMonth = trips.filter((trip) => {
+      const d = new Date(trip.date);
+      return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+    });
+    const totalKmMes = tripsThisMonth.reduce((sum, t) => sum + t.km, 0);
+
+    // 2. TRIGGER NOTIFICATIONS
+    // Checking daily goal
+    if (activeTodayTarget > 0 && hojeGanhos >= activeTodayTarget) {
+      const todayStrKey = new Date().toLocaleDateString('pt-BR');
+      const alertedToday = localStorage.getItem(`alert_meta_dia_${todayStrKey}`);
+      if (!alertedToday) {
+        triggerLocalNotification(
+          '🎯 Meta Diária Atingida! 🎉',
+          `Parabéns! Você bateu sua meta de hoje de R$ ${activeTodayTarget.toFixed(2)} acumulando R$ ${hojeGanhos.toFixed(2)}!`
+        );
+        localStorage.setItem(`alert_meta_dia_${todayStrKey}`, 'true');
+      }
+    }
+
+    // Checking maintenance threshold
+    if (state.maintenanceThresholdKm > 0 && totalKmMes >= state.maintenanceThresholdKm) {
+      const alertedMonthKey = `${currentYear}-${currentMonth + 1}_${state.maintenanceThresholdKm}`;
+      const alertedMaintenance = localStorage.getItem(`alert_manutencao_${alertedMonthKey}`);
+      if (!alertedMaintenance) {
+        triggerLocalNotification(
+          '⚠️ Limite de Manutenção Atingido!',
+          `Atenção: Você rodou ${totalKmMes.toFixed(2)} km de bike este mês, superando o limite de ${state.maintenanceThresholdKm} km.`
+        );
+        localStorage.setItem(`alert_manutencao_${alertedMonthKey}`, 'true');
+      }
+    }
   }, [state]);
 
   // MUTATOR ACTIONS
