@@ -5,22 +5,36 @@
 
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
-import { Target, Flag, Plus, Trash2, Calendar, TrendingUp, Sparkles, AlertCircle, Info, Flame } from 'lucide-react';
+import { Target, Flag, Plus, Trash2, Calendar, TrendingUp, Sparkles, AlertCircle, Info, Flame, History, RefreshCw, HelpCircle, ArrowRight } from 'lucide-react';
 import { AppState } from '../types';
 
 interface MetaViewProps {
   state: AppState;
   addExtraGoal: (name: string, targetValue: number, daysLimit: number) => void;
   deleteExtraGoal: (id: string) => void;
+  adjustAccumulatedGoal: (amount: number, description: string) => void;
+  resetAccumulatedGoal: () => void;
 }
 
-export function MetaView({ state, addExtraGoal, deleteExtraGoal }: MetaViewProps) {
+export function MetaView({
+  state,
+  addExtraGoal,
+  deleteExtraGoal,
+  adjustAccumulatedGoal,
+  resetAccumulatedGoal
+}: MetaViewProps) {
   const [name, setName] = useState('');
   const [value, setValue] = useState('');
   const [days, setDays] = useState('30');
   const [showForm, setShowForm] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
+
+  // Interactive adjustments form states
+  const [isAdjustFormOpen, setIsAdjustFormOpen] = useState(false);
+  const [adjustedValueText, setAdjustedValueText] = useState('');
+  const [adjustErrorMsg, setAdjustErrorMsg] = useState('');
+  const [adjustSuccessMsg, setAdjustSuccessMsg] = useState('');
 
   // Calculations
   const totalDespesas = state.expenses.reduce((sum, exp) => sum + exp.value, 0);
@@ -68,6 +82,86 @@ export function MetaView({ state, addExtraGoal, deleteExtraGoal }: MetaViewProps
     setSuccessMsg('Objetivo extra adicionado com sucesso!');
     setTimeout(() => setSuccessMsg(''), 4000);
   };
+
+  // 1. Rollover Calculations
+  const d_now = new Date();
+  const d_currentYear = d_now.getFullYear();
+  const d_currentMonth = d_now.getMonth(); // 0-11
+  const d_currentMonthStr = `${d_currentYear}-${String(d_currentMonth + 1).padStart(2, '0')}`;
+
+  const d_currentMonthRegs = (state.dayRegistrations || []).filter(reg => reg.date.startsWith(d_currentMonthStr));
+  const d_offDays = d_currentMonthRegs.filter(reg => reg.status === 'folga' || reg.status === 'falta');
+  const d_numOffDays = d_offDays.length;
+  const d_numWorkDays = Math.max(1, 30 - d_numOffDays);
+
+  const d_todayStrDate = `${d_currentYear}-${String(d_currentMonth + 1).padStart(2, '0')}-${String(d_now.getDate()).padStart(2, '0')}`;
+  const d_todayReg = (state.dayRegistrations || []).find(reg => reg.date === d_todayStrDate);
+  const d_todayStatus = d_todayReg ? d_todayReg.status : 'trabalho';
+  const d_isOffToday = d_todayStatus === 'folga' || d_todayStatus === 'falta';
+
+  let d_adjustedDailyTargetForWorkingDays = totalDailyTarget;
+  if (!state.keepOriginalGoalToggle) {
+    if (state.targetDivisionMode === 'concentrate') {
+      d_adjustedDailyTargetForWorkingDays = (totalDailyTarget * 30 / d_numWorkDays) * 1.25;
+    } else {
+      d_adjustedDailyTargetForWorkingDays = totalDailyTarget * 30 / d_numWorkDays;
+    }
+  }
+
+  // Active target for today (including rollover value)
+  const d_pendingRollover = state.accumulatedGoalPendente || 0;
+  const d_activeTodayTarget = d_isOffToday ? 0 : (d_adjustedDailyTargetForWorkingDays + d_pendingRollover);
+
+  // Today's real earnings (calendar day)
+  const d_todayStr = new Date().toDateString();
+  const d_hojeGanhos = state.deliveries
+    .filter(del => {
+      const d = new Date(del.timestamp);
+      return d.toDateString() === d_todayStr;
+    })
+    .reduce((sum, del) => sum + del.value, 0);
+
+  // Shortfall
+  const d_missingValue = Math.max(0, d_activeTodayTarget - d_hojeGanhos);
+
+  const handleOpenAdjustForm = () => {
+    setAdjustedValueText(d_missingValue.toFixed(2));
+    setIsAdjustFormOpen(true);
+    setAdjustErrorMsg('');
+    setAdjustSuccessMsg('');
+  };
+
+  const handleConfirmAdjust = (e: React.FormEvent) => {
+    e.preventDefault();
+    setAdjustErrorMsg('');
+    setAdjustSuccessMsg('');
+
+    const parsedAdj = parseFloat(adjustedValueText);
+    if (isNaN(parsedAdj) || parsedAdj < 0) {
+      setAdjustErrorMsg('Informe um valor de acúmulo válido (igual ou maior que zero).');
+      return;
+    }
+
+    // Date formatting to DD/MM
+    const getFormattedDate = (d: Date) => {
+      const day = String(d.getDate()).padStart(2, '0');
+      const mo = String(d.getMonth() + 1).padStart(2, '0');
+      return `${day}/${mo}`;
+    };
+
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    const desc = `Ajuste de meta: R$ ${parsedAdj.toFixed(2)} transferido do dia ${getFormattedDate(new Date())} para ${getFormattedDate(tomorrow)}`;
+    
+    adjustAccumulatedGoal(parsedAdj, desc);
+    setIsAdjustFormOpen(false);
+    setAdjustSuccessMsg(`🚀 Sucesso! R$ ${parsedAdj.toFixed(2)} foi acumulado para a meta do próximo dia de trabalho.`);
+    setTimeout(() => {
+      setAdjustSuccessMsg('');
+    }, 5000);
+  };
+
   return (
     <div id="meta_view_container" className="space-y-6">
       
@@ -117,6 +211,162 @@ export function MetaView({ state, addExtraGoal, deleteExtraGoal }: MetaViewProps
             </div>
           </div>
         </div>
+      </div>
+
+      {/* SEÇÃO COMPLETA: AJUSTE E ARRASTO DE META — SISTEMA PROFISSIONAL */}
+      <div id="drag_and_adjust_goal_card" className="bg-white rounded-3xl p-6 border border-slate-100 shadow-xs space-y-4">
+        <div className="flex items-center justify-between pb-2 border-b border-slate-50">
+          <div className="flex items-center gap-2">
+            <TrendingUp size={20} className="text-orange-500" />
+            <h3 className="font-bold text-slate-850 text-base">⚖️ AJUSTE E ARRASTO DE META</h3>
+          </div>
+          <span className="text-[10px] uppercase font-extrabold text-orange-600 bg-orange-50 px-2.5 py-1 rounded-full tracking-wider shrink-0">
+            Dia Fraco
+          </span>
+        </div>
+
+        <p className="text-slate-500 text-xs leading-relaxed">
+          Se o dia foi fraco e você não atingiu a meta, arraste o valor restante para que ele se acumule no próximo dia útil. Assim, você nunca perde o controle financeiro do mês!
+        </p>
+
+        {/* CÁLCULO AUTOMÁTICO DO QUE FALTOU */}
+        <div className="grid grid-cols-3 gap-2 bg-slate-50/70 p-3 rounded-2xl border border-slate-100 text-center">
+          <div className="p-1.5">
+            <span className="text-[10px] font-bold text-slate-400 block uppercase tracking-wider">Meta Hoje</span>
+            <span className="text-xs sm:text-sm font-black text-slate-705 block mt-0.5">
+              R$ {d_activeTodayTarget.toFixed(2)}
+            </span>
+          </div>
+          <div className="p-1.5 border-x border-slate-200">
+            <span className="text-[10px] font-bold text-slate-400 block uppercase tracking-wider">Feito Hoje</span>
+            <span className="text-xs sm:text-sm font-black text-brand-600 block mt-0.5">
+              R$ {d_hojeGanhos.toFixed(2)}
+            </span>
+          </div>
+          <div className="p-1.5">
+            <span className="text-[10px] font-bold text-slate-400 block uppercase tracking-wider">Faltou</span>
+            <span className={`text-xs sm:text-sm font-black font-mono block mt-0.5 ${d_missingValue > 0 ? 'text-orange-650' : 'text-emerald-600'}`}>
+              R$ {d_missingValue.toFixed(2)}
+            </span>
+          </div>
+        </div>
+
+        {/* Current accumulated rollover display */}
+        <div className="flex items-center justify-between text-xs bg-slate-50/50 p-2.5 rounded-xl border border-slate-100">
+          <span className="text-slate-500 font-medium">Acumulado pendente para próximo dia útil:</span>
+          <span className="font-mono font-bold text-slate-800">R$ {d_pendingRollover.toFixed(2)}</span>
+        </div>
+
+        {/* ACTIONS & BUTTONS */}
+        <div className="flex flex-col sm:flex-row gap-2 pt-1">
+          <button
+            onClick={handleOpenAdjustForm}
+            className="flex-1 bg-orange-500 hover:bg-orange-600 active:bg-orange-700 text-white font-bold text-xs py-3 px-4 rounded-xl transition-all flex items-center justify-center gap-1.5 shadow-sm cursor-pointer"
+          >
+            <TrendingUp size={15} /> 📉 AJUSTAR META (DIA FRACO)
+          </button>
+          
+          <button
+            onClick={() => {
+              if (confirm('Tem certeza de que deseja zerar os valores de meta acumulados?')) {
+                resetAccumulatedGoal();
+              }
+            }}
+            className="border border-slate-200 hover:bg-slate-50 text-slate-600 font-bold text-xs py-3 px-4 rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+          >
+            <RefreshCw size={14} /> 🔄 ZERAR VALORES ACUMULADOS
+          </button>
+        </div>
+
+        {/* ACTION SUCCESS / SUCCESS NOTIFIERS */}
+        {adjustSuccessMsg && (
+          <div className="bg-emerald-50 text-emerald-800 border-l-4 border-emerald-500 rounded-xl p-3 text-xs flex items-center gap-1.5 animate-pulse">
+            <Sparkles size={15} className="text-emerald-500 shrink-0" />
+            <span>{adjustSuccessMsg}</span>
+          </div>
+        )}
+
+        {/* EDIT ADJUSTMENT INLINE ACCORDION FORM */}
+        {isAdjustFormOpen && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            className="bg-orange-50/30 border border-orange-200 rounded-2xl p-4 space-y-3"
+          >
+            <div className="flex justify-between items-center pb-1 border-b border-orange-100">
+              <h4 className="text-xs font-bold text-orange-850 flex items-center gap-1">
+                <AlertCircle size={14} className="text-orange-600" /> Transferir Shortfall
+              </h4>
+              <button
+                onClick={() => setIsAdjustFormOpen(false)}
+                className="text-slate-400 hover:text-slate-600 text-[11px] font-bold"
+              >
+                Cancelar
+              </button>
+            </div>
+
+            <form onSubmit={handleConfirmAdjust} className="space-y-3">
+              {adjustErrorMsg && (
+                <div className="bg-red-50 text-red-600 p-2 rounded-lg text-[11px] flex items-center gap-1">
+                  <AlertCircle size={12} />
+                  <span>{adjustErrorMsg}</span>
+                </div>
+              )}
+
+              <p className="text-[11px] text-slate-600 font-medium">
+                ⚠️ Esse valor será adicionado na meta do próximo dia útil de trabalho.
+              </p>
+
+              <div className="space-y-1">
+                <label className="block text-[10px] font-extrabold text-slate-455 uppercase tracking-wider">
+                  Valor que faltou para transferir (R$)
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={adjustedValueText}
+                    onChange={(e) => setAdjustedValueText(e.target.value)}
+                    className="flex-1 bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-orange-500 font-mono font-bold"
+                  />
+                  <button
+                    type="submit"
+                    className="bg-brand-500 hover:bg-brand-600 text-white font-bold text-xs px-4 rounded-xl shadow-xs transition-all cursor-pointer"
+                  >
+                    Confirmar
+                  </button>
+                </div>
+              </div>
+            </form>
+          </motion.div>
+        )}
+
+        {/* TRANSFERS HISTORY LOG LIST */}
+        {state.goalAdjustments && state.goalAdjustments.length > 0 && (
+          <div className="pt-4 border-t border-slate-100 space-y-2">
+            <h4 className="text-[11px] font-extrabold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+              <History size={12} className="text-slate-400" /> Histórico de Ajustes de Meta
+            </h4>
+            <div className="max-h-40 overflow-y-auto space-y-1.5 pr-2">
+              {state.goalAdjustments.slice(0, 5).map((adj) => (
+                <div key={adj.id} className="text-[11px] flex justify-between items-center bg-slate-50 border border-slate-100 p-2.5 rounded-xl">
+                  <div className="space-y-0.5">
+                    <span className="font-medium text-slate-700 block leading-snug">
+                      {adj.description}
+                    </span>
+                    <span className="text-[10px] text-slate-400 block font-bold">
+                      {adj.date}
+                    </span>
+                  </div>
+                  <span className={`text-[10px] font-mono font-black shrink-0 px-2 py-0.5 rounded-md ${adj.amount > 0 ? 'text-orange-655 bg-orange-50 border border-orange-100' : 'text-slate-500 bg-slate-100'}`}>
+                    {adj.amount > 0 ? `+R$ ${adj.amount.toFixed(2)}` : 'Zerar'}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Action alerts */}

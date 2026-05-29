@@ -76,8 +76,9 @@ export function HomeView({
     }
   }
 
-  // Active target for today (if off/absence, we enforce 0 as requested)
-  const activeTodayTarget = isOffToday ? 0 : adjustedDailyTargetForWorkingDays;
+  // Active target for today (if off/absence, we enforce 0 as requested, and sum any pending goal rollover)
+  const pendingRollover = state.accumulatedGoalPendente || 0;
+  const activeTodayTarget = isOffToday ? 0 : (adjustedDailyTargetForWorkingDays + pendingRollover);
 
 
   // Filter deliveries done today (current calendar day)
@@ -166,6 +167,12 @@ export function HomeView({
                   </span>
                 )}
               </div>
+
+              {pendingRollover > 0 && !isOffToday && (
+                <div className="flex md:justify-end items-center gap-1 text-[11px] text-amber-200 font-bold bg-white/10 border border-white/20 rounded-xl p-2 mt-1">
+                  <span>⚠️ R$ {adjustedDailyTargetForWorkingDays.toFixed(2)} normal + R$ {pendingRollover.toFixed(2)} acumulados</span>
+                </div>
+              )}
 
               {/* Show Original vs Adjusted Targets if there are rest/absence days registered */}
               {numOffDays > 0 && !state.keepOriginalGoalToggle && (

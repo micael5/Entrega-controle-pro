@@ -43,7 +43,7 @@ export function transmitWidgetData(state: AppState): void {
       }
     }
 
-    const activeTodayTarget = isOffToday ? 0 : adjustedDailyTargetForWorkingDays;
+    const activeTodayTarget = isOffToday ? 0 : (adjustedDailyTargetForWorkingDays + (state.accumulatedGoalPendente || 0));
 
     // Filter today's items
     const todayStr = new Date().toDateString();

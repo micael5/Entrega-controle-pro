@@ -48,6 +48,13 @@ export interface DayRegistration {
   status: DayStatus;
 }
 
+export interface GoalAdjustment {
+  id: string;
+  date: string; // YYYY-MM-DD
+  description: string;
+  amount: number;
+}
+
 export interface AppState {
   deliveries: Delivery[];
   expenses: Expense[];
@@ -59,6 +66,8 @@ export interface AppState {
   dayRegistrations?: DayRegistration[];
   targetDivisionMode?: 'equal' | 'concentrate';
   keepOriginalGoalToggle?: boolean;
+  accumulatedGoalPendente?: number;
+  goalAdjustments?: GoalAdjustment[];
   widgetOptions?: {
     showMeta?: boolean;
     showGanhos?: boolean;

@@ -67,7 +67,7 @@ export default function App() {
       }
     }
 
-    const activeTodayTarget = isOffToday ? 0 : adjustedDailyTargetForWorkingDays;
+    const activeTodayTarget = isOffToday ? 0 : (adjustedDailyTargetForWorkingDays + (state.accumulatedGoalPendente || 0));
 
     const todayStr = new Date().toDateString();
     const hojeGanhos = state.deliveries
@@ -292,6 +292,40 @@ export default function App() {
     }));
   };
 
+  // 11c. Adjust accumulated goal shortfall (carryover)
+  const adjustAccumulatedGoal = (amount: number, description: string) => {
+    setState(prev => {
+      const newAdjustment = {
+        id: `adjust_${Math.random().toString(36).substr(2, 9)}_${Date.now()}`,
+        date: new Date().toLocaleDateString('pt-BR'),
+        description,
+        amount
+      };
+      return {
+        ...prev,
+        accumulatedGoalPendente: amount,
+        goalAdjustments: [newAdjustment, ...(prev.goalAdjustments || [])]
+      };
+    });
+  };
+
+  // 11d. Reset accumulated goal carryover
+  const resetAccumulatedGoal = () => {
+    setState(prev => {
+      const newAdjustment = {
+        id: `adjust_${Math.random().toString(36).substr(2, 9)}_${Date.now()}`,
+        date: new Date().toLocaleDateString('pt-BR'),
+        description: "Valores acumulados zerados manualmente",
+        amount: 0
+      };
+      return {
+        ...prev,
+        accumulatedGoalPendente: 0,
+        goalAdjustments: [newAdjustment, ...(prev.goalAdjustments || [])]
+      };
+    });
+  };
+
   // 12. Reset database to starting layouts
   const resetToDefaults = () => {
     localStorage.removeItem('entregacontrole_pro_db');
@@ -329,6 +363,8 @@ export default function App() {
             state={state}
             addExtraGoal={addExtraGoal}
             deleteExtraGoal={deleteExtraGoal}
+            adjustAccumulatedGoal={adjustAccumulatedGoal}
+            resetAccumulatedGoal={resetAccumulatedGoal}
           />
         );
       case 'cofrinho':

@@ -56,6 +56,8 @@ export function loadState(): AppState {
         trips: [],
         maintenanceThresholdKm: 150,
         screenReaderActive: false,
+        accumulatedGoalPendente: 0,
+        goalAdjustments: [],
       };
       saveState(initialState);
       return initialState;
@@ -73,6 +75,8 @@ export function loadState(): AppState {
       dayRegistrations: parsed.dayRegistrations || [],
       targetDivisionMode: parsed.targetDivisionMode || 'equal',
       keepOriginalGoalToggle: parsed.keepOriginalGoalToggle !== undefined ? parsed.keepOriginalGoalToggle : false,
+      accumulatedGoalPendente: parsed.accumulatedGoalPendente !== undefined ? parsed.accumulatedGoalPendente : 0,
+      goalAdjustments: parsed.goalAdjustments || [],
       widgetOptions: parsed.widgetOptions || {
         showMeta: true,
         showGanhos: true,
@@ -94,6 +98,8 @@ export function loadState(): AppState {
       dayRegistrations: [],
       targetDivisionMode: 'equal',
       keepOriginalGoalToggle: false,
+      accumulatedGoalPendente: 0,
+      goalAdjustments: [],
       widgetOptions: {
         showMeta: true,
         showGanhos: true,
