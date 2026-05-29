@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.5
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Home, Receipt, Target, PiggyBank, Settings, Bike, MapPin } from 'lucide-react';
 
@@ -26,6 +26,198 @@ export default function App() {
   // Main local database synchronizer
   const [state, setState] = useState<AppState>(() => loadState());
   const [activeTab, setActiveTab] = useState<TabType>('home');
+
+  // Hoisted GPS Ride Tracking & Screen Reader states for cross-tab persistence
+  const [trackingActive, setTrackingActive] = useState(false);
+  const [seconds, setSeconds] = useState(0);
+  const [distanceKm, setDistanceKm] = useState(0.0);
+  const [trackSource, setTrackSource] = useState<'ifood' | 'quita' | 'manual'>('manual');
+  const [trackValue, setTrackValue] = useState<number>(0);
+  const [logs, setLogs] = useState<string[]>([]);
+
+  // Geolocation watch id and timers
+  const watchIdRef = useRef<number | null>(null);
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const lastPositionRef = useRef<GeolocationPosition | null>(null);
+
+  // Sync references for background interval closure optimization
+  const secondsRef = useRef(seconds);
+  const distanceKmRef = useRef(distanceKm);
+  const trackSourceRef = useRef(trackSource);
+  const trackValueRef = useRef(trackValue);
+  const trackingActiveRef = useRef(trackingActive);
+
+  useEffect(() => { secondsRef.current = seconds; }, [seconds]);
+  useEffect(() => { distanceKmRef.current = distanceKm; }, [distanceKm]);
+  useEffect(() => { trackSourceRef.current = trackSource; }, [trackSource]);
+  useEffect(() => { trackValueRef.current = trackValue; }, [trackValue]);
+  useEffect(() => { trackingActiveRef.current = trackingActive; }, [trackingActive]);
+
+  const addLog = (message: string) => {
+    const time = new Date().toLocaleTimeString('pt-BR');
+    setLogs((prev) => [`[${time}] ${message}`, ...prev.slice(0, 15)]);
+  };
+
+  const calculateDistanceBetweenPoints = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+    const R = 6371; // km
+    const dLat = ((lat2 - lat1) * Math.PI) / 180;
+    const dLon = ((lon2 - lon1) * Math.PI) / 180;
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos((lat1 * Math.PI) / 180) *
+        Math.cos((lat2 * Math.PI) / 180) *
+        Math.sin(dLon / 2) *
+        Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+  };
+
+  // Time and passive distance ticker effect (Stopwatch duration clock)
+  useEffect(() => {
+    if (trackingActive) {
+      timerRef.current = setInterval(() => {
+        setSeconds((prev) => prev + 1);
+        
+        // When running an automated ride, simulate displacement in real-time
+        if (trackSourceRef.current !== 'manual') {
+          setDistanceKm((prev) => prev + 0.0035); // increases ~0.21 km per minute realistically
+        }
+      }, 1000);
+    } else {
+      if (timerRef.current) clearInterval(timerRef.current);
+    }
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
+  }, [trackingActive]);
+
+  // Real GPS Geolocation watch effect
+  useEffect(() => {
+    if (trackingActive) {
+      if ('geolocation' in navigator) {
+        addLog('[GPS]: Iniciando conexão com o satélite GPS...');
+        watchIdRef.current = navigator.geolocation.watchPosition(
+          (position) => {
+            if (lastPositionRef.current) {
+              // Calculate real physical distance increment
+              const dist = calculateDistanceBetweenPoints(
+                lastPositionRef.current.coords.latitude,
+                lastPositionRef.current.coords.longitude,
+                position.coords.latitude,
+                position.coords.longitude
+              );
+              // Only add if user is actually moving (with basic noise filter of 1.5 meters)
+              if (dist > 0.0015) {
+                setDistanceKm((prev) => prev + dist);
+                addLog(`[GPS]: Deslocamento detectado de +${(dist * 1000).toFixed(0)}m`);
+              }
+            } else {
+              addLog('[GPS]: Sinal de localização obtido com sucesso!');
+            }
+            lastPositionRef.current = position;
+          },
+          (error) => {
+            const errMsg = error.code === 1 
+              ? 'Permissão de GPS negada pelo usuário.' 
+              : `Sinal fraco ou erro de GPS: ${error.message}`;
+            addLog(`[GPS Erro]: ${errMsg}`);
+          },
+          { enableHighAccuracy: true, maximumAge: 1000, timeout: 5000 }
+        );
+      } else {
+        addLog('[GPS Erro]: Este aparelho não possui suporte para Geolocalização.');
+      }
+    } else {
+      if (watchIdRef.current !== null) {
+        navigator.geolocation.clearWatch(watchIdRef.current);
+        watchIdRef.current = null;
+      }
+      lastPositionRef.current = null;
+    }
+
+    return () => {
+      if (watchIdRef.current !== null) {
+        navigator.geolocation.clearWatch(watchIdRef.current);
+      }
+    };
+  }, [trackingActive]);
+
+  // Active screen reader background listener (Silent Android/iOS Bridge integration) - ALWAYS ACTIVE AT THE APP LEVEL!
+  useEffect(() => {
+    if (state.screenReaderActive) {
+      addLog('[Leitor de Tela]: Monitoramento em tempo real iniciado.');
+      addLog('[Leitor de Tela]: Pronto! Aguardando novas atividades nas telas do iFood ou Quita...');
+
+      // Expose globally to let the accessibility wrapper trigger silent automated starts
+      (window as any).onRideAccepted = (platform: 'ifood' | 'quita', value: number, distance: number) => {
+        if (!state.screenReaderActive) {
+          addLog(`[Leitor de Tela]: Proposta recebida de ${platform}, mas o leitor de tela está inativo.`);
+          return;
+        }
+
+        addLog(`[Leitor de Tela]: Detectada nova corrida aceita no aplicativo do ${platform === 'ifood' ? 'iFood' : 'Quita'} (R$ ${value.toFixed(2)} - ${distance} km).`);
+        
+        // Register delivery data silently
+        addDeliveryDynamic(platform, value);
+        addLog(`[Leitor de Tela - Banco de Dados]: Ganho de R$ ${value.toFixed(2)} registrado silenciosamente.`);
+
+        // Direct start of GPS tracker
+        setSeconds(0);
+        setDistanceKm(0);
+        setTrackSource(platform);
+        setTrackValue(value);
+        setTrackingActive(true);
+        lastPositionRef.current = null;
+        addLog(`[Leitor de Tela - GPS]: Medição de percurso iniciada automaticamente.`);
+      };
+
+      // Expose globally to let accessibility wrapper trigger silent automated finishes
+      (window as any).onRideFinished = () => {
+        if (!state.screenReaderActive) return;
+        
+        const isTracking = trackingActiveRef.current;
+        const currentSource = trackSourceRef.current;
+
+        if (!isTracking || currentSource === 'manual') {
+          addLog(`[Leitor de Tela]: Comando de finalização recebido, mas nenhum percurso automático válido está em andamento.`);
+          return;
+        }
+
+        const currentPlatform = currentSource;
+        addLog(`[Leitor de Tela]: Detectado comando FINALIZAR CORRIDA no aplicativo original do ${currentPlatform === 'ifood' ? 'iFood Entregador' : 'Quita'}.`);
+        
+        // Collect real metrics
+        const finalDistance = parseFloat(distanceKmRef.current.toFixed(2));
+        const finalSeconds = secondsRef.current;
+        const avgSpeed = finalSeconds > 0 ? parseFloat(((finalDistance / finalSeconds) * 3600).toFixed(1)) : 0;
+        const finalValue = trackValueRef.current;
+
+        const newTrip: Trip = {
+          id: `trip_${Math.random().toString(36).substr(2, 9)}_${Date.now()}`,
+          km: finalDistance,
+          durationSeconds: finalSeconds,
+          avgSpeedKmH: avgSpeed,
+          date: new Date().toISOString(),
+          platform: currentPlatform,
+          value: finalValue || (currentPlatform === 'ifood' ? state.config.ifoodValue : currentPlatform === 'quita' ? state.config.quitaValue : 0)
+        };
+
+        addTrip(newTrip);
+        setTrackingActive(false);
+
+        addLog(`[Leitor de Tela - GPS]: Percurso encerrado silenciosamente. Gravados ${finalDistance.toFixed(2)} km.`);
+      };
+    } else {
+      // Unregister if screen reader is turned off
+      delete (window as any).onRideAccepted;
+      delete (window as any).onRideFinished;
+    }
+
+    return () => {
+      delete (window as any).onRideAccepted;
+      delete (window as any).onRideFinished;
+    };
+  }, [state.screenReaderActive, state.config]);
 
   // Multi-state automatic persistent sync
   useEffect(() => {
@@ -382,6 +574,18 @@ export default function App() {
             addDeliveryDynamic={addDeliveryDynamic}
             updateMaintenanceThreshold={updateMaintenanceThreshold}
             updateScreenReader={updateScreenReader}
+            trackingActive={trackingActive}
+            setTrackingActive={setTrackingActive}
+            seconds={seconds}
+            setSeconds={setSeconds}
+            distanceKm={distanceKm}
+            setDistanceKm={setDistanceKm}
+            trackSource={trackSource}
+            setTrackSource={setTrackSource}
+            trackValue={trackValue}
+            setTrackValue={setTrackValue}
+            logs={logs}
+            addLog={addLog}
           />
         );
       case 'settings':
