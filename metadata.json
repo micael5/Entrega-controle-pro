@@ -1,0 +1,6 @@
+{
+  "name": "EntregaControle Pro",
+  "description": "Aplicativo completo e funcional para entregadores autônomos de bicicleta gerenciarem ganhos (iFood/Quita), despesas, metas e reservas no cofrinho.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 
+  Android 4x2 Home Screen App Widget Configuration for EntregaControle Pro.
+  Guarantees proper default dimensions compatible with standard Android launcher grids.
+-->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:minWidth="250dp"
+    android:minHeight="110dp"
+    android:updatePeriodMillis="300000"
+    android:initialLayout="@layout/widget_delivery_tracker_4x2"
+    android:resizeMode="horizontal|vertical"
+    android:widgetCategory="home_screen">
+</appwidget-provider>

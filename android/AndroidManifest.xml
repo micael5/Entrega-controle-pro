@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 
+  AndroidManifest registration snippet for EntregaControle Pro.
+  Add this inside your <application> tags when compiling your Android package (APK).
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.entregacontrole.pro">
+
+    <application>
+
+        <!-- Broadcast Receiver for the 4x2 Home Screen Widget -->
+        <receiver android:name=".EntregaControleWidgetProvider"
+            android:label="EntregaControle Pro Widget (4x2)"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="com.entregacontrole.pro.ACTION_WIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_info" />
+        </receiver>
+
+    </application>
+</manifest>

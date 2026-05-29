@@ -1,0 +1,284 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Native Android 4x2 Home Screen Widget Layout for EntregaControle Pro.
+  Polished, clean, high-contrast dark layout styled to fit beautifully in the cellular UI.
+-->
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_container_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:padding="12dp"
+    android:background="@drawable/bg_widget_dark_slate"
+    android:clickable="true"
+    android:focusable="true">
+
+    <!-- Left Brand Color Border Indicator Bar -->
+    <View
+        android:id="@+id/widget_brand_indicator"
+        android:layout_width="4dp"
+        android:layout_height="match_parent"
+        android:layout_alignParentLeft="true"
+        android:background="#E11D48" />
+
+    <!-- TOP HEADER ROW: App logo, target sync timestamp, and current state indicator badge -->
+    <LinearLayout
+        android:id="@+id/widget_layout_header"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_toRightOf="@id/widget_brand_indicator"
+        android:layout_marginLeft="10dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingBottom="6dp">
+
+        <TextView
+            android:id="@+id/widget_text_brand_title"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="EntregaControle Pro"
+            android:textColor="#F8FAFC"
+            android:textSize="12sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/widget_text_brand_tag"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginLeft="6dp"
+            android:background="#2E11D48"
+            android:paddingHorizontal="4dp"
+            android:paddingVertical="1dp"
+            android:text="4x2"
+            android:textColor="#FB7185"
+            android:textSize="8sp"
+            android:textStyle="bold" />
+
+        <!-- Spacer -->
+        <View
+            android:layout_width="0dp"
+            android:layout_height="0dp"
+            android:layout_weight="1" />
+
+        <TextView
+            android:id="@+id/widget_text_sync_time"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginRight="8dp"
+            android:text="Sinc: 15h30"
+            android:textColor="#94A3B8"
+            android:textSize="9sp" />
+
+        <TextView
+            android:id="@+id/widget_status_pilot_badge"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:paddingHorizontal="6dp"
+            android:paddingVertical="2dp"
+            android:text="ATIVO"
+            android:textColor="#FFFFFF"
+            android:textSize="8sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+
+    <!-- HORIZONTAL DIVISION LINE -->
+    <View
+        android:id="@+id/widget_header_divider"
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:layout_below="@id/widget_layout_header"
+        android:layout_toRightOf="@id/widget_brand_indicator"
+        android:layout_marginLeft="10dp"
+        android:background="#334155" />
+
+    <!-- CORE MIDDLE STATS: Today Target, Today total and day-off layout badge -->
+    <LinearLayout
+        android:id="@+id/widget_layout_core_stats"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_below="@id/widget_header_divider"
+        android:layout_toRightOf="@id/widget_brand_indicator"
+        android:layout_marginLeft="10dp"
+        android:layout_marginTop="8dp"
+        android:orientation="horizontal"
+        weightSum="12">
+
+        <!-- Column A: Today Goal Target -->
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="3.5"
+            android:orientation="vertical">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="META DO DIA"
+                android:textColor="#94A3B8"
+                android:textSize="8sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/widget_text_today_target"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:text="R$ 150,00"
+                android:textColor="#FFFFFF"
+                android:textSize="12sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <!-- Column B: Today Earned -->
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="3.5"
+            android:orientation="vertical">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="GANHOS HOJE"
+                android:textColor="#94A3B8"
+                android:textSize="8sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/widget_text_today_earnings"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:text="R$ 90,00"
+                android:textColor="#FB7185"
+                android:textSize="12sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <!-- Column C: Distance (KM) -->
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="2.5"
+            android:orientation="vertical">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="DISTÂNCIA"
+                android:textColor="#94A3B8"
+                android:textSize="8sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/widget_text_today_km"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:text="34.5 km"
+                android:textColor="#E2E8F0"
+                android:textSize="11sp" />
+        </LinearLayout>
+
+        <!-- Column D: Work Duration -->
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="2.5"
+            android:orientation="vertical"
+            android:gravity="right">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="TEMPO ATIVO"
+                android:textColor="#94A3B8"
+                android:textSize="8sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/widget_text_today_time"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:text="02h45min"
+                android:textColor="#E2E8F0"
+                android:textSize="11sp" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- FOOTER PROGRESS GROUP: Dynamically loaded and hidden on Day-offs -->
+    <LinearLayout
+        android:id="@+id/widget_layout_progress_group"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_below="@id/widget_layout_core_stats"
+        android:layout_toRightOf="@id/widget_brand_indicator"
+        android:layout_marginLeft="10dp"
+        android:layout_marginTop="10dp"
+        android:orientation="vertical">
+
+        <!-- Progress Labels (Percentage and Remaining text indicators) -->
+        <RelativeLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content">
+
+            <TextView
+                android:id="@+id/widget_text_progress_label_prefix"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Progresso: "
+                android:textColor="#64748B"
+                android:textSize="8sp" />
+
+            <TextView
+                android:id="@+id/widget_text_progress_percentage"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_toRightOf="@id/widget_text_progress_label_prefix"
+                android:text="60%"
+                android:textColor="#94A3B8"
+                android:textSize="8sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/widget_text_meta_status_text"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_alignParentRight="true"
+                android:text="Falta R$ 60,00"
+                android:textColor="#94A3B8"
+                android:textSize="8sp"
+                android:textStyle="bold" />
+        </RelativeLayout>
+
+        <!-- Progress Bar Fill -->
+        <ProgressBar
+            android:id="@+id/widget_progress_bar_fill"
+            style="?android:attr/progressBarStyleHorizontal"
+            android:layout_width="match_parent"
+            android:layout_height="6dp"
+            android:layout_marginTop="3dp"
+            android:max="100"
+            android:progress="60"
+            android:progressDrawable="@android:drawable/progress_horizontal" />
+    </LinearLayout>
+
+    <!-- SINGLE LARGE REASSURING TEXT ELEMENT FOR REGISTERED DAY OFFS -->
+    <TextView
+        android:id="@+id/widget_text_day_off_badge"
+        android:layout_width="match_parent"
+        android:layout_height="28dp"
+        android:layout_below="@id/widget_layout_core_stats"
+        android:layout_toRightOf="@id/widget_brand_indicator"
+        android:layout_marginLeft="10dp"
+        android:layout_marginTop="10dp"
+        android:background="#2E11D48"
+        android:gravity="center"
+        android:text="🌴 DIA DE FOLGA ✅"
+        android:textColor="#F59E0B"
+        android:textColorHighlight="#B45309"
+        android:textSize="11sp"
+        android:textStyle="bold"
+        android:visibility="gone" />
+
+</RelativeLayout>
