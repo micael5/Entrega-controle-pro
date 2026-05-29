@@ -107,7 +107,11 @@ export function SettingsView({
     const promptEvent = deferredPrompt || (window as any).deferredPrompt;
 
     if (!promptEvent) {
-      alert("✅ Aplicativo já está instalado ou não permitido!");
+      if (window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone) {
+        alert("✅ Você já está usando o aplicativo instalado!");
+      } else {
+        alert("⚠️ Aguarde carregar ou atualize a página. Se persistir, limpe dados do Chrome.");
+      }
       return;
     }
 
@@ -119,10 +123,10 @@ export function SettingsView({
       const resultado = await promptEvent.userChoice;
 
       if (resultado.outcome === 'accepted') {
-        alert("✅ INSTALADO COM SUCESSO! Ícone já está na tela inicial");
+        alert("✅ INSTALADO COM SUCESSO! Ícone na tela inicial.");
         setActionSuccess('📲 Excelente! O ícone "EntregaControle Pro" foi adicionado com sucesso à sua Tela de Início!');
       } else {
-        alert("❌ Instalação cancelada por você");
+        alert("❌ Você cancelou a instalação.");
         setActionSuccess('Instalação cancelada pelo usuário.');
       }
     } catch (err) {
