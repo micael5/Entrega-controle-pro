@@ -78,10 +78,10 @@ export function CalendarModal({
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 15 }}
           transition={{ duration: 0.2 }}
-          className="bg-white rounded-3xl w-full max-w-md shadow-2xl overflow-hidden border border-slate-100 flex flex-col"
+          className="bg-white rounded-3xl w-[95%] max-w-md max-h-[90vh] shadow-2xl overflow-hidden border border-slate-100 flex flex-col"
         >
           {/* Header */}
-          <div className="bg-gradient-to-r from-brand-600 to-orange-600 p-5 text-white flex items-center justify-between">
+          <div className="bg-gradient-to-r from-brand-600 to-orange-600 p-5 text-white flex items-center justify-between shrink-0">
             <div className="flex items-center gap-2.5">
               <Calendar size={18} className="text-orange-200" />
               <div>
@@ -100,7 +100,7 @@ export function CalendarModal({
           </div>
 
           {/* Body Calendar Panel */}
-          <div className="p-5 space-y-4">
+          <div className="p-5 space-y-4 overflow-y-auto flex-1">
             <div className="flex justify-between items-center bg-slate-50 border border-slate-100 p-2.5 rounded-xl">
               <span className="text-xs font-bold text-slate-800 uppercase tracking-wide">
                 {currentMonthName} {currentYear}
