@@ -100,58 +100,39 @@ export function SettingsView({
     if (window.self !== window.top) {
       const cleanUrl = window.location.origin + '?autoPrompt=true';
       window.open(cleanUrl, '_blank');
-      setActionSuccess('📲 Abrindo em uma nova aba segura externa para acionar a janela de instalação automática do Android imediatamente!');
       return;
     }
 
     // Busca o evento capturado
-    let promptEvent = deferredPrompt || (window as any).deferredPrompt;
+    const promptEvent = deferredPrompt || (window as any).deferredPrompt;
 
-    // Se o evento ainda não estiver disponível, tenta aguardar até 1.5 segundos
     if (!promptEvent) {
-      setIsWaitingPrompt(true);
-      const waitForPrompt = () => {
-        return new Promise<any>((resolve) => {
-          let attempts = 0;
-          const interval = setInterval(() => {
-            const current = (window as any).deferredPrompt;
-            if (current) {
-              clearInterval(interval);
-              resolve(current);
-            }
-            attempts++;
-            if (attempts >= 8) { // 1.6 segundos
-              clearInterval(interval);
-              resolve(null);
-            }
-          }, 200);
-        });
-      };
-      promptEvent = await waitForPrompt();
-      setIsWaitingPrompt(false);
+      alert("✅ Aplicativo já está instalado ou não permitido!");
+      return;
     }
 
-    if (promptEvent) {
-      try {
-        // Dispara o comando real do sistema do celular
-        await promptEvent.prompt();
-        const choiceResult = await promptEvent.userChoice;
-        if (choiceResult.outcome === 'accepted') {
-          setActionSuccess('📲 Excelente! O ícone "EntregaControle Pro" foi adicionado com sucesso à sua Tela de Início!');
-        } else {
-          setActionSuccess('Instalação cancelada pelo usuário.');
-        }
-      } catch (err) {
-        console.warn('Erro ao acionar prompt nativo:', err);
-        setActionError('Não foi possível acionar a instalação automática do sistema.');
+    try {
+      // ✅ CHAMA A JANELA DO SISTEMA
+      promptEvent.prompt();
+
+      // ESPERA EU CLICAR EM ADICIONAR OU CANCELAR
+      const resultado = await promptEvent.userChoice;
+
+      if (resultado.outcome === 'accepted') {
+        alert("✅ INSTALADO COM SUCESSO! Ícone já está na tela inicial");
+        setActionSuccess('📲 Excelente! O ícone "EntregaControle Pro" foi adicionado com sucesso à sua Tela de Início!');
+      } else {
+        alert("❌ Instalação cancelada por você");
+        setActionSuccess('Instalação cancelada pelo usuário.');
       }
-      // Limpa os prompts capturados para reutilização futura
-      setDeferredPrompt(null);
-      (window as any).deferredPrompt = null;
-    } else {
-      // Se nem o delay funcionou (pode ocorrer se o navegador já tiver instalado o PWA ou estiver em modo desktop sem suporte)
-      setActionError('O navegador demorou para responder. Caso já não esteja instalado, use os Três Pontinhos (⋮) do Chrome > "Adicionar à tela de início".');
+    } catch (err) {
+      console.warn('Erro ao acionar prompt nativo:', err);
+      setActionError('Não foi possível acionar a instalação automática do sistema.');
     }
+
+    // Reseta
+    setDeferredPrompt(null);
+    (window as any).deferredPrompt = null;
   };
 
   // Handle configuration update (iFood / Quita delivery rates)
@@ -730,8 +711,9 @@ export function SettingsView({
             </div>
             
             <button
+              id="btn-instalar"
               onClick={handleAutoReinstall}
-              className="w-full bg-brand-500 hover:bg-brand-600 text-white font-bold text-xs py-2.5 rounded-xl cursor-pointer transition-all flex items-center justify-center gap-1.5 shadow-sm shadow-brand-500/10"
+              className="w-full bg-orange-500 hover:bg-orange-600 text-white font-bold text-xs py-2.5 rounded-xl cursor-pointer transition-all flex items-center justify-center gap-1.5 shadow-sm shadow-orange-500/10"
             >
               <Smartphone size={14} /> 📲 Instalar / Atualizar Aplicativo Completo
             </button>
