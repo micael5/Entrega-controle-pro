@@ -8,7 +8,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Home, Receipt, Target, PiggyBank, Settings, Bike, MapPin } from 'lucide-react';
 
 import { loadState, saveState } from './db';
-import { AppState, Delivery, Expense, ExtraGoal, Config, Trip } from './types';
+import { AppState, Delivery, Expense, ExtraGoal, Config, Trip, ReserveHistoryEntry } from './types';
 import { transmitWidgetData } from './utils/widgetSync';
 import { triggerLocalNotification } from './utils/notifications';
 
@@ -233,7 +233,6 @@ export default function App() {
     const extraDailyTarget = state.extraGoals.reduce((sum, goal) => {
       return sum + (goal.targetValue / Math.max(1, goal.daysLimit));
     }, 0);
-    const totalDailyTarget = baseDailyTarget + extraDailyTarget;
 
     const now = new Date();
     const currentYear = now.getFullYear();
@@ -244,6 +243,21 @@ export default function App() {
     const offDays = currentMonthRegs.filter(reg => reg.status === 'folga' || reg.status === 'falta');
     const numOffDays = offDays.length;
     const numWorkDays = Math.max(1, 30 - numOffDays);
+
+    // Dynamic reserves target calculation
+    const monthsRemaining = Math.max(1, 12 - (currentMonth + 1) + 1);
+
+    const decimoTerceiroTotal = state.decimoTerceiroTotal !== undefined ? state.decimoTerceiroTotal : 1500.00;
+    const decimoTerceiroMensal = decimoTerceiroTotal / monthsRemaining;
+    const decimoTerceiroUnadjustedDaily = decimoTerceiroMensal / 30;
+
+    const feriasDias = state.feriasDias !== undefined ? state.feriasDias : 5;
+    const feriasValorDiario = state.feriasValorDiario !== undefined ? state.feriasValorDiario : 120.00;
+    const feriasTotal = feriasDias * feriasValorDiario;
+    const feriasMensal = feriasTotal / monthsRemaining;
+    const feriasUnadjustedDaily = feriasMensal / 30;
+
+    const totalDailyTarget = baseDailyTarget + extraDailyTarget + decimoTerceiroUnadjustedDaily + feriasUnadjustedDaily;
 
     const todayStrDate = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
     const todayReg = (state.dayRegistrations || []).find(reg => reg.date === todayStrDate);
@@ -518,6 +532,102 @@ export default function App() {
     });
   };
 
+  // 11e. Annual reserve configs and balance administration
+  const updateAnnualReserveConfig = (decimoTotal: number, feriasDiasCount: number, feriasDiarioValue: number) => {
+    setState(prev => ({
+      ...prev,
+      decimoTerceiroTotal: decimoTotal,
+      feriasDias: feriasDiasCount,
+      feriasValorDiario: feriasDiarioValue
+    }));
+  };
+
+  const depositReserves = (decimoAmount: number, feriasAmount: number, description: string) => {
+    setState(prev => {
+      const history = prev.annualReserveHistory || [];
+      const newEntries: ReserveHistoryEntry[] = [];
+      const todayStr = new Date().toLocaleDateString('pt-BR');
+      
+      if (decimoAmount > 0) {
+        newEntries.push({
+          id: `res_entry_${Math.random().toString(36).substr(2, 9)}_${Date.now()}_13`,
+          date: todayStr,
+          type: 'deposit',
+          category: '13th',
+          description: description,
+          amount: decimoAmount
+        });
+      }
+
+      if (feriasAmount > 0) {
+        newEntries.push({
+          id: `res_entry_${Math.random().toString(36).substr(2, 9)}_${Date.now()}_f`,
+          date: todayStr,
+          type: 'deposit',
+          category: 'vacation',
+          description: description,
+          amount: feriasAmount
+        });
+      }
+
+      return {
+        ...prev,
+        decimoTerceiroSaved: (prev.decimoTerceiroSaved || 0) + decimoAmount,
+        feriasSaved: (prev.feriasSaved || 0) + feriasAmount,
+        annualReserveHistory: [...newEntries, ...history]
+      };
+    });
+  };
+
+  const adjustReserveBalance = (category: '13th' | 'vacation', amount: number, type: 'deposit' | 'withdraw', description: string) => {
+    setState(prev => {
+      const history = prev.annualReserveHistory || [];
+      const updatedAmount = type === 'deposit' ? amount : -amount;
+      const key = category === '13th' ? 'decimoTerceiroSaved' : 'feriasSaved';
+      
+      const newEntry: ReserveHistoryEntry = {
+        id: `res_entry_${Math.random().toString(36).substr(2, 9)}_${Date.now()}`,
+        date: new Date().toLocaleDateString('pt-BR'),
+        type: type,
+        category: category,
+        description,
+        amount: Math.abs(amount)
+      };
+
+      const currentSecured = prev[key] || 0;
+      const finalSecured = Math.max(0, currentSecured + updatedAmount);
+
+      return {
+        ...prev,
+        [key]: finalSecured,
+        annualReserveHistory: [newEntry, ...history]
+      };
+    });
+  };
+
+  const resetReserveBalance = (category: '13th' | 'vacation') => {
+    setState(prev => {
+      const history = prev.annualReserveHistory || [];
+      const key = category === '13th' ? 'decimoTerceiroSaved' : 'feriasSaved';
+      const label = category === '13th' ? 'Décimo Terceiro' : 'Férias';
+      
+      const newEntry: ReserveHistoryEntry = {
+        id: `res_entry_${Math.random().toString(36).substr(2, 9)}_${Date.now()}`,
+        date: new Date().toLocaleDateString('pt-BR'),
+        type: 'reset',
+        category: category,
+        description: `Reservas de ${label} zeradas manualmente`,
+        amount: prev[key] || 0
+      };
+
+      return {
+        ...prev,
+        [key]: 0,
+        annualReserveHistory: [newEntry, ...history]
+      };
+    });
+  };
+
   // 12. Reset database to starting layouts
   const resetToDefaults = () => {
     localStorage.removeItem('entregacontrole_pro_db');
@@ -539,6 +649,9 @@ export default function App() {
             updateTargetDivisionMode={updateTargetDivisionMode}
             toggleKeepOriginalGoal={toggleKeepOriginalGoal}
             updateWidgetOptions={updateWidgetOptions}
+            depositReserves={depositReserves}
+            adjustReserveBalance={adjustReserveBalance}
+            resetReserveBalance={resetReserveBalance}
           />
         );
       case 'expenses':
@@ -557,6 +670,10 @@ export default function App() {
             deleteExtraGoal={deleteExtraGoal}
             adjustAccumulatedGoal={adjustAccumulatedGoal}
             resetAccumulatedGoal={resetAccumulatedGoal}
+            updateAnnualReserveConfig={updateAnnualReserveConfig}
+            depositReserves={depositReserves}
+            adjustReserveBalance={adjustReserveBalance}
+            resetReserveBalance={resetReserveBalance}
           />
         );
       case 'cofrinho':
@@ -602,6 +719,7 @@ export default function App() {
             updateTargetDivisionMode={updateTargetDivisionMode}
             toggleKeepOriginalGoal={toggleKeepOriginalGoal}
             updateWidgetOptions={updateWidgetOptions}
+            updateAnnualReserveConfig={updateAnnualReserveConfig}
           />
         );
       default:

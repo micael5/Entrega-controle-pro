@@ -5,7 +5,7 @@
 
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Bike, Sparkles, TrendingUp, DollarSign, Receipt, HelpCircle, CheckCircle, Flame, CalendarClock, Calendar, Smartphone, RefreshCw, Sliders, Clock, MapPin, Activity, Wifi } from 'lucide-react';
+import { Bike, Sparkles, TrendingUp, DollarSign, Receipt, HelpCircle, CheckCircle, Flame, CalendarClock, Calendar, Smartphone, RefreshCw, Sliders, Clock, MapPin, Activity, Wifi, PiggyBank } from 'lucide-react';
 import { AppState } from '../types';
 import { CalendarModal } from './CalendarModal';
 
@@ -17,6 +17,9 @@ interface HomeViewProps {
   updateTargetDivisionMode: (mode: 'equal' | 'concentrate') => void;
   toggleKeepOriginalGoal: (keep: boolean) => void;
   updateWidgetOptions: (options: AppState['widgetOptions']) => void;
+  depositReserves: (decimoAmount: number, feriasAmount: number, description: string) => void;
+  adjustReserveBalance: (category: '13th' | 'vacation', amount: number, type: 'deposit' | 'withdraw', description: string) => void;
+  resetReserveBalance: (category: '13th' | 'vacation') => void;
 }
 
 export function HomeView({
@@ -26,10 +29,45 @@ export function HomeView({
   updateDayStatus,
   updateTargetDivisionMode,
   toggleKeepOriginalGoal,
-  updateWidgetOptions
+  updateWidgetOptions,
+  depositReserves,
+  adjustReserveBalance,
+  resetReserveBalance
 }: HomeViewProps) {
   const [lastRegistered, setLastRegistered] = useState<{ id: string; text: string } | null>(null);
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
+
+  // States for Quick Reserve transaction form
+  const [quickAdjustOpen, setQuickAdjustOpen] = useState(false);
+  const [quickAdjustCategory, setQuickAdjustCategory] = useState<'13th' | 'vacation'>('13th');
+  const [quickAdjustType, setQuickAdjustType] = useState<'deposit' | 'withdraw'>('deposit');
+  const [quickAdjustValue, setQuickAdjustValue] = useState('');
+  const [quickAdjustDesc, setQuickAdjustDesc] = useState('');
+  const [quickAdjustFeedback, setQuickAdjustFeedback] = useState('');
+  const [quickAdjustError, setQuickAdjustError] = useState('');
+
+  const handleQuickAdjustSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setQuickAdjustError('');
+    setQuickAdjustFeedback('');
+
+    const val = parseFloat(quickAdjustValue);
+    if (isNaN(val) || val <= 0) {
+      setQuickAdjustError('Informe um valor de moeda válido maior que zero (Ex: 50.00).');
+      return;
+    }
+
+    if (!quickAdjustDesc.trim()) {
+      setQuickAdjustError('Informe um breve motivo ou descrição da transação.');
+      return;
+    }
+
+    adjustReserveBalance(quickAdjustCategory, val, quickAdjustType, quickAdjustDesc.trim());
+    setQuickAdjustFeedback(`🚀 Transação de R$ ${val.toFixed(2)} efetuada com sucesso!`);
+    setQuickAdjustValue('');
+    setQuickAdjustDesc('');
+    setTimeout(() => setQuickAdjustFeedback(''), 4500);
+  };
 
   // Math conversions
   const totalGanhos = state.deliveries.reduce((sum, del) => sum + del.value, 0);
@@ -37,7 +75,26 @@ export function HomeView({
   
   // Total target includes expenses + all extra goals total target values
   const totalObjetivosExtras = state.extraGoals.reduce((sum, goal) => sum + goal.targetValue, 0);
-  const metaTotal = totalDespesas + totalObjetivosExtras;
+  
+  // Combine 13th + Holiday totals into total reserves to save (proportional until Dec)
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth(); // 0-11
+  const currentMonthStr = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}`;
+
+  const monthsRemaining = Math.max(1, 12 - (currentMonth + 1) + 1);
+
+  const decimoTerceiroTotal = state.decimoTerceiroTotal !== undefined ? state.decimoTerceiroTotal : 1500.00;
+  const decimoTerceiroMensal = decimoTerceiroTotal / monthsRemaining;
+  const decimoTerceiroUnadjustedDaily = decimoTerceiroMensal / 30;
+
+  const feriasDias = state.feriasDias !== undefined ? state.feriasDias : 5;
+  const feriasValorDiario = state.feriasValorDiario !== undefined ? state.feriasValorDiario : 120.00;
+  const feriasTotal = feriasDias * feriasValorDiario;
+  const feriasMensal = feriasTotal / monthsRemaining;
+  const feriasUnadjustedDaily = feriasMensal / 30;
+
+  const metaTotal = totalDespesas + totalObjetivosExtras + (decimoTerceiroMensal * monthsRemaining) + (feriasMensal * monthsRemaining);
 
   const restandoParaMeta = Math.max(0, metaTotal - totalGanhos);
   const sobrouIdeal = totalGanhos > metaTotal ? totalGanhos - metaTotal : 0;
@@ -48,14 +105,9 @@ export function HomeView({
   const extraDailyTarget = state.extraGoals.reduce((sum, goal) => {
     return sum + (goal.targetValue / Math.max(1, goal.daysLimit));
   }, 0);
-  const totalDailyTarget = baseDailyTarget + extraDailyTarget;
+  const totalDailyTarget = baseDailyTarget + extraDailyTarget + decimoTerceiroUnadjustedDaily + feriasUnadjustedDaily;
 
   // Day-adjusted daily target recalculations for off/absence days
-  const now = new Date();
-  const currentYear = now.getFullYear();
-  const currentMonth = now.getMonth(); // 0-11
-  const currentMonthStr = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}`;
-
   const currentMonthRegs = (state.dayRegistrations || []).filter(reg => reg.date.startsWith(currentMonthStr));
   const offDays = currentMonthRegs.filter(reg => reg.status === 'folga' || reg.status === 'falta');
   const numOffDays = offDays.length;
@@ -68,17 +120,28 @@ export function HomeView({
 
   // Division strategy evaluation
   let adjustedDailyTargetForWorkingDays = totalDailyTarget;
+  let adjustmentMultiplier = 1;
   if (!state.keepOriginalGoalToggle) {
     if (state.targetDivisionMode === 'concentrate') {
-      adjustedDailyTargetForWorkingDays = (totalDailyTarget * 30 / numWorkDays) * 1.25;
+      adjustmentMultiplier = (30 / numWorkDays) * 1.25;
     } else {
-      adjustedDailyTargetForWorkingDays = totalDailyTarget * 30 / numWorkDays;
+      adjustmentMultiplier = 30 / numWorkDays;
     }
+    adjustedDailyTargetForWorkingDays = totalDailyTarget * adjustmentMultiplier;
   }
+
+  const decimoTerceiroDiarioAjustado = decimoTerceiroUnadjustedDaily * adjustmentMultiplier;
+  const feriasDiarioAjustado = feriasUnadjustedDaily * adjustmentMultiplier;
+  const baseDailyDiarioAjustado = (baseDailyTarget + extraDailyTarget) * adjustmentMultiplier;
 
   // Active target for today (if off/absence, we enforce 0 as requested, and sum any pending goal rollover)
   const pendingRollover = state.accumulatedGoalPendente || 0;
   const activeTodayTarget = isOffToday ? 0 : (adjustedDailyTargetForWorkingDays + pendingRollover);
+
+  // Check if today has already been deposited automatically
+  const alreadyDepositedToday = (state.annualReserveHistory || []).some(
+    entry => entry.date === new Date().toLocaleDateString('pt-BR') && entry.description.includes("automático")
+  );
 
 
   // Filter deliveries done today (current calendar day)
@@ -232,6 +295,199 @@ export function HomeView({
       </div>
 
 
+      {/* 📊 ACOMPANHAMENTO DE RESERVAS ANUAIS */}
+      {(() => {
+        const decimoSaved = state.decimoTerceiroSaved || 0;
+        const decimoTotal = state.decimoTerceiroTotal !== undefined ? state.decimoTerceiroTotal : 1500.00;
+        const decimoPercent = decimoTotal > 0 ? (decimoSaved / decimoTotal) * 100 : 0;
+
+        const feriasSaved = state.feriasSaved || 0;
+        const feriasDiasCount = state.feriasDias !== undefined ? state.feriasDias : 5;
+        const feriasDiarioVal = state.feriasValorDiario !== undefined ? state.feriasValorDiario : 120.00;
+        const feriasTotalVal = feriasDiasCount * feriasDiarioVal;
+        const feriasPercent = feriasTotalVal > 0 ? (feriasSaved / feriasTotalVal) * 100 : 0;
+
+        const getProgressBlocks = (percent: number, activeBlock: string, emptyBlock: string) => {
+          const totalSlots = 8;
+          const activeSlots = Math.min(totalSlots, Math.round((percent / 100) * totalSlots));
+          const emptySlots = totalSlots - activeSlots;
+          return activeBlock.repeat(activeSlots) + emptyBlock.repeat(emptySlots);
+        };
+
+        return (
+          <div id="annual_reserves_progress_home" className="bg-white border-2 border-indigo-100 rounded-3xl p-5 shadow-xs space-y-4">
+            <div className="flex items-center justify-between pb-2 border-b border-indigo-50/60">
+              <div className="flex items-center gap-2">
+                <span className="text-xl">📊</span>
+                <h3 className="font-extrabold text-slate-900 text-sm sm:text-base font-display">ACOMPANHAMENTO DE RESERVAS ANUAIS</h3>
+              </div>
+              <span className="text-[10px] font-black text-indigo-700 bg-indigo-50 px-2.5 py-0.5 rounded-full uppercase tracking-wider">
+                Acúmulo Proporcional
+              </span>
+            </div>
+
+            <div className="space-y-4">
+              {/* BARRA 1 — DÉCIMO TERCEIRO */}
+              <div id="res_progress_decimo" className="space-y-1">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center text-xs sm:text-sm font-bold text-slate-800 gap-1">
+                  <span className="text-blue-700 flex items-center gap-1.5 font-extrabold">
+                    🔵 BARRA 1 — DÉCIMO TERCEIRO
+                  </span>
+                  <span className="font-mono text-[11px] sm:text-xs text-slate-600 bg-slate-50 border border-slate-100 px-2 py-0.5 rounded-md">
+                    Guardado: <b className="text-blue-700 text-xs text-slate-800 font-extrabold">R$ {decimoSaved.toFixed(2)}</b> | Total: R$ {decimoTotal.toFixed(2)}
+                  </span>
+                </div>
+                
+                <div className="flex items-center gap-2 bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+                  <span className="text-[15px] sm:text-lg tracking-wider font-mono select-none shrink-0" title={`${decimoPercent.toFixed(1)}%`}>
+                    {getProgressBlocks(decimoPercent, '🟦', '⬜')}
+                  </span>
+                  <span className="font-mono font-extrabold text-[#1d4ed8] text-[11px] sm:text-xs shrink-0 bg-blue-50 border border-blue-100 px-2 py-0.5 rounded-md">
+                    {decimoPercent.toFixed(0)}% concluído
+                  </span>
+                  
+                  <div className="flex-1 bg-slate-200 h-2 rounded-full overflow-hidden ml-1 hidden xs:block">
+                    <div className="bg-blue-600 h-full rounded-full" style={{ width: `${decimoPercent}%` }} />
+                  </div>
+                </div>
+              </div>
+
+              {/* BARRA 2 — FÉRIAS */}
+              <div id="res_progress_ferias" className="space-y-1">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center text-xs sm:text-sm font-bold text-slate-800 gap-1 col-span-2">
+                  <span className="text-amber-600 flex items-center gap-1.5 font-extrabold">
+                    💛 BARRA 2 — FÉRIAS
+                  </span>
+                  <span className="font-mono text-[11px] sm:text-xs text-slate-600 bg-slate-50 border border-slate-100 px-2 py-0.5 rounded-md">
+                    Guardado: <b className="text-amber-600 text-xs font-extrabold">R$ {feriasSaved.toFixed(2)}</b> | Total: R$ {feriasTotalVal.toFixed(2)}
+                  </span>
+                </div>
+                
+                <div className="flex items-center gap-2 bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+                  <span className="text-[15px] sm:text-lg tracking-wider font-mono select-none shrink-0" title={`${feriasPercent.toFixed(1)}%`}>
+                    {getProgressBlocks(feriasPercent, '🟨', '⬜')}
+                  </span>
+                  <span className="font-mono font-extrabold text-[#b45309] text-[11px] sm:text-xs shrink-0 bg-amber-50 border border-amber-100 px-2 py-0.5 rounded-md">
+                    {feriasPercent.toFixed(0)}% concluído
+                  </span>
+
+                  <div className="flex-1 bg-slate-200 h-2 rounded-full overflow-hidden ml-1 hidden xs:block">
+                    <div className="bg-amber-400 h-full rounded-full" style={{ width: `${feriasPercent}%` }} />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Quick Actions for Deposits and Withdrawals */}
+            <div className="pt-2 border-t border-slate-100 space-y-3">
+              <div className="flex justify-between items-center flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => setQuickAdjustOpen(!quickAdjustOpen)}
+                  className="text-xs font-bold text-brand-610 hover:text-brand-700 flex items-center gap-1.5 cursor-pointer select-none"
+                >
+                  {quickAdjustOpen ? '✖ Fechar depósitos rápidos' : '📥 Lançamento de Reserva Manual Rápido (Guardar ou Sacar)...'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (confirm('Deseja realmente zerar os valores guardados de ambas as reservas? Esta ação é permanente e gerará registros de retiradas.')) {
+                      resetReserveBalance('13th');
+                      resetReserveBalance('vacation');
+                      alert('Os saldos do seu cofre foram zerados com êxito! Os dados foram enviados ao histórico.');
+                    }
+                  }}
+                  className="text-[10px] font-black text-red-500 hover:text-red-700 font-mono tracking-wider select-none shrink-0 cursor-pointer"
+                >
+                  🔄 ZERAR COFRE
+                </button>
+              </div>
+
+              {quickAdjustOpen && (
+                <motion.div
+                  initial={{ opacity: 0, y: -5 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-3"
+                >
+                  <span className="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider block">Depósito ou Retirada Manual de Valores</span>
+                  
+                  {quickAdjustFeedback && (
+                    <div className="bg-emerald-50 text-emerald-850 p-2.5 rounded-xl text-xs font-bold border border-emerald-200">
+                      {quickAdjustFeedback}
+                    </div>
+                  )}
+
+                  {quickAdjustError && (
+                    <div className="bg-red-50 text-red-650 p-2.5 rounded-xl text-xs font-semibold border border-red-205">
+                      {quickAdjustError}
+                    </div>
+                  )}
+
+                  <form onSubmit={handleQuickAdjustSubmit} className="space-y-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                      <div>
+                        <label className="block text-[9px] font-extrabold text-slate-405 uppercase tracking-wider mb-1">Cofre Alvo</label>
+                        <select
+                          value={quickAdjustCategory}
+                          onChange={(e) => setQuickAdjustCategory(e.target.value as '13th' | 'vacation')}
+                          className="w-full bg-white border border-slate-250 rounded-xl px-2.5 py-1.5 text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-brand-500 font-medium cursor-pointer"
+                        >
+                          <option value="13th">13º Salário</option>
+                          <option value="vacation">Férias</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-[9px] font-extrabold text-slate-405 uppercase tracking-wider mb-1">Operação</label>
+                        <select
+                          value={quickAdjustType}
+                          onChange={(e) => setQuickAdjustType(e.target.value as 'deposit' | 'withdraw')}
+                          className="w-full bg-white border border-slate-250 rounded-xl px-2.5 py-1.5 text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-brand-500 font-medium cursor-pointer"
+                        >
+                          <option value="deposit">📥 Depositar (+)</option>
+                          <option value="withdraw">📤 Sacar / Retirar (–)</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-[9px] font-extrabold text-slate-405 uppercase tracking-wider mb-1">Valor (R$)</label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          placeholder="0.00"
+                          value={quickAdjustValue}
+                          onChange={(e) => setQuickAdjustValue(e.target.value)}
+                          className="w-full bg-white border border-slate-250 rounded-xl px-2.5 py-1.5 text-xs text-slate-800 font-mono font-bold focus:outline-none focus:ring-1 focus:ring-brand-500"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-[9px] font-extrabold text-slate-405 uppercase tracking-wider mb-1">Motivo / Descrição</label>
+                      <input
+                        type="text"
+                        placeholder="Ex: Depósito voluntário extra, Resgate de férias"
+                        value={quickAdjustDesc}
+                        onChange={(e) => setQuickAdjustDesc(e.target.value)}
+                        className="w-full bg-white border border-slate-250 rounded-xl px-2.5 py-1.5 text-xs text-slate-750 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                      />
+                    </div>
+
+                    <button
+                      type="submit"
+                      className="w-full bg-indigo-600 hover:bg-indigo-700 active:scale-[0.99] text-white font-extrabold text-xs py-2.5 rounded-xl transition-all shadow-md cursor-pointer"
+                    >
+                      Confirmar Movimentação de Saldo
+                    </button>
+                  </form>
+                </motion.div>
+              )}
+            </div>
+          </div>
+        );
+      })()}
+
+
       {/* Calendar toggle control */}
       <div id="home_calendar_indicator" className="bg-white border border-slate-100 rounded-3xl p-5 shadow-sm shadow-brand-500/5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div className="flex items-start gap-3">
@@ -274,6 +530,78 @@ export function HomeView({
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* GLOWING CELEBRATORY CARD FOR ANNUAL DEPOSITS */}
+      {hojeGanhos >= activeTodayTarget && activeTodayTarget > 0 && !isOffToday && (
+        <div id="reserves_celebration_card" className="bg-gradient-to-br from-amber-50 via-yellow-50 to-amber-100/50 border-2 border-amber-300 rounded-3xl p-5 shadow-sm relative overflow-hidden">
+          <div className="absolute -right-6 -bottom-6 text-amber-500/10 pointer-events-none">
+            <Sparkles size={110} />
+          </div>
+          <div className="relative z-10 space-y-3">
+            <div className="flex items-center gap-2">
+              <span className="bg-amber-500 text-white text-[10px] uppercase font-black px-2 py-0.5 rounded-full tracking-wider leading-none">
+                Parabéns!
+              </span>
+              <h3 className="font-extrabold font-display text-amber-950 text-sm sm:text-md">
+                🏆 Meta de Hoje Superada!
+              </h3>
+            </div>
+            
+            <p className="text-slate-700 text-xs leading-relaxed max-w-lg">
+              Você bateu sua meta diária de <b>R$ {activeTodayTarget.toFixed(2)}</b> (acumulado hoje: <b>R$ {hojeGanhos.toFixed(2)}</b>). 
+              Aproveite para guardar as parcelas de reserva de hoje no seu cofrinho anual separado:
+            </p>
+
+            <div className="bg-white/80 backdrop-blur-xs rounded-2xl p-3 border border-amber-200/50 grid grid-cols-2 gap-3 divide-x divide-amber-100">
+              <div className="px-2">
+                <span className="text-[10px] text-slate-500 block uppercase font-bold">13º Salário Diário</span>
+                <span className="text-sm font-black text-amber-600 block mt-0.5 font-mono">
+                  +R$ {decimoTerceiroDiarioAjustado.toFixed(2)}
+                </span>
+              </div>
+              <div className="px-4">
+                <span className="text-[10px] text-slate-500 block uppercase font-bold">Férias ({state.feriasDias} dias)</span>
+                <span className="text-sm font-black text-amber-600 block mt-0.5 font-mono">
+                  +R$ {feriasDiarioAjustado.toFixed(2)}
+                </span>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+              <div className="text-xs text-slate-500">
+                Total para depositar hoje: <strong className="text-amber-700 font-mono">R$ {(decimoTerceiroDiarioAjustado + feriasDiarioAjustado).toFixed(2)}</strong>
+              </div>
+              
+              {alreadyDepositedToday ? (
+                <span className="bg-emerald-100 border border-emerald-300 text-emerald-800 font-extrabold text-[11px] py-1.5 px-3.5 rounded-xl flex items-center gap-1">
+                  <CheckCircle size={14} className="text-emerald-600" /> DEPOSITADO!
+                </span>
+              ) : (
+                <button
+                  onClick={() => {
+                    depositReserves(
+                      decimoTerceiroDiarioAjustado,
+                      feriasDiarioAjustado,
+                      `Depósito diário automático (Meta batida em ${new Date().toLocaleDateString('pt-BR')})`
+                    );
+                    const toastId = Math.random().toString();
+                    setLastRegistered({
+                      id: toastId,
+                      text: `🎉 R$ ${(decimoTerceiroDiarioAjustado + feriasDiarioAjustado).toFixed(2)} guardados com sucesso nas Reservas!`
+                    });
+                    setTimeout(() => {
+                      setLastRegistered(prev => (prev?.id === toastId ? null : prev));
+                    }, 3000);
+                  }}
+                  className="bg-amber-500 hover:bg-amber-600 text-white font-extrabold text-xs py-2 px-3.5 rounded-xl transition-all shadow-md active:scale-[0.98] cursor-pointer"
+                >
+                  💰 Guardar R$ {(decimoTerceiroDiarioAjustado + feriasDiarioAjustado).toFixed(2)} nas Reservas
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Two giant side-by-side action buttons */}
       <div id="earnings_actions" className="grid grid-cols-2 gap-3 sm:gap-4">

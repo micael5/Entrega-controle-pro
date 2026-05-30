@@ -21,20 +21,46 @@ export function CofrinhoView({ state }: CofrinhoViewProps) {
 
   // Let's create a list of all targets for the cofrinho (expenses + goals combined)
   const allSavingsBuckets = [
-    ...state.expenses.map((exp) => ({
-      id: exp.id,
-      name: exp.name,
-      targetValue: exp.value,
-      type: 'expense' as const,
-      detail: `Controle (Vence dia ${exp.dueDate})`,
-    })),
-    ...state.extraGoals.map((g) => ({
-      id: g.id,
-      name: g.name,
-      targetValue: g.targetValue,
-      type: 'goal' as const,
-      detail: `Objetivo Extra (${g.daysLimit} dias)`,
-    })),
+    ...state.expenses.map((exp) => {
+      const ratio = metaTotal > 0 ? exp.value / metaTotal : 0;
+      const allocatedAmount = totalGanhos >= metaTotal ? exp.value : totalGanhos * ratio;
+      return {
+        id: exp.id,
+        name: exp.name,
+        targetValue: exp.value,
+        allocatedAmount: allocatedAmount,
+        type: 'expense' as const,
+        detail: `Controle (Vence dia ${exp.dueDate})`,
+      };
+    }),
+    ...state.extraGoals.map((g) => {
+      const ratio = metaTotal > 0 ? g.targetValue / metaTotal : 0;
+      const allocatedAmount = totalGanhos >= metaTotal ? g.targetValue : totalGanhos * ratio;
+      return {
+        id: g.id,
+        name: g.name,
+        targetValue: g.targetValue,
+        allocatedAmount: allocatedAmount,
+        type: 'goal' as const,
+        detail: `Objetivo Extra (${g.daysLimit} dias)`,
+      };
+    }),
+    {
+      id: 'res_decimo_box',
+      name: '13º Salário',
+      targetValue: state.decimoTerceiroTotal !== undefined ? state.decimoTerceiroTotal : 1500.00,
+      allocatedAmount: state.decimoTerceiroSaved || 0,
+      type: 'reserve' as const,
+      detail: 'Reserva Anual (Provisionado mensalmente)',
+    },
+    {
+      id: 'res_ferias_box',
+      name: 'Férias Cobertura',
+      targetValue: (state.feriasDias !== undefined ? state.feriasDias : 5) * (state.feriasValorDiario !== undefined ? state.feriasValorDiario : 120.00),
+      allocatedAmount: state.feriasSaved || 0,
+      type: 'reserve' as const,
+      detail: `Reserva de Férias (${state.feriasDias !== undefined ? state.feriasDias : 5} dias)`,
+    }
   ];
 
   // Allocation logic:
@@ -96,9 +122,7 @@ export function CofrinhoView({ state }: CofrinhoViewProps) {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {allSavingsBuckets.map((bucket) => {
-            // Allocate proportionally
-            const ratio = metaTotal > 0 ? bucket.targetValue / metaTotal : 0;
-            const allocatedAmount = isSuperceeded ? bucket.targetValue : totalGanhos * ratio;
+            const allocatedAmount = bucket.allocatedAmount;
             const progress = bucket.targetValue > 0 ? Math.min(100, (allocatedAmount / bucket.targetValue) * 100) : 0;
             const remainsText = Math.max(0, bucket.targetValue - allocatedAmount);
 
@@ -112,8 +136,8 @@ export function CofrinhoView({ state }: CofrinhoViewProps) {
                     <h3 className="font-bold text-sm text-slate-800 font-display truncate" title={bucket.name}>{bucket.name}</h3>
                     <span className="text-[10px] text-slate-400 block mt-0.5 truncate">{bucket.detail}</span>
                   </div>
-                  <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded-full shrink-0 ${bucket.type === 'expense' ? 'bg-orange-50 text-brand-600' : 'bg-indigo-50 text-indigo-600'}`}>
-                    {bucket.type === 'expense' ? 'Conta' : 'Objetivo'}
+                  <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded-full shrink-0 ${bucket.type === 'expense' ? 'bg-orange-50 text-brand-600' : bucket.type === 'goal' ? 'bg-indigo-50 text-indigo-600' : 'bg-amber-50 text-amber-700'}`}>
+                    {bucket.type === 'expense' ? 'Conta' : bucket.type === 'goal' ? 'Objetivo' : 'CLT Reserva'}
                   </span>
                 </div>
 
@@ -121,13 +145,13 @@ export function CofrinhoView({ state }: CofrinhoViewProps) {
                 <div className="space-y-1 min-w-0">
                   <div className="flex flex-wrap sm:flex-nowrap items-baseline justify-between gap-1 text-[11px] sm:text-xs font-mono min-w-0">
                     <span className="text-slate-450 font-sans shrink-0">Guardado</span>
-                    <span className={`font-bold truncate max-w-full ${progress >= 100 ? 'text-emerald-600' : 'text-slate-750'}`} title={`R$ ${allocatedAmount.toFixed(2)} / R$ ${bucket.targetValue.toFixed(2)}`}>
+                    <span className={`font-bold truncate max-w-full ${progress >= 100 ? 'text-emerald-600' : 'text-slate-755'}`} title={`R$ ${allocatedAmount.toFixed(2)} / R$ ${bucket.targetValue.toFixed(2)}`}>
                       R$ {allocatedAmount.toFixed(2)} <span className="text-slate-300 font-light font-sans">/</span> R$ {bucket.targetValue.toFixed(2)}
                     </span>
                   </div>
                   <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
                     <div
-                      className={`h-full rounded-full transition-all duration-300 ${progress >= 100 ? 'bg-emerald-500' : bucket.type === 'expense' ? 'bg-brand-500' : 'bg-indigo-500'}`}
+                      className={`h-full rounded-full transition-all duration-300 ${progress >= 100 ? 'bg-emerald-500' : bucket.type === 'expense' ? 'bg-brand-500' : bucket.type === 'goal' ? 'bg-indigo-505' : 'bg-amber-500'}`}
                       style={{ width: `${progress}%` }}
                     />
                   </div>

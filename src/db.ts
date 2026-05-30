@@ -58,6 +58,12 @@ export function loadState(): AppState {
         screenReaderActive: false,
         accumulatedGoalPendente: 0,
         goalAdjustments: [],
+        decimoTerceiroTotal: 1500.00,
+        feriasDias: 5,
+        feriasValorDiario: 120.00,
+        decimoTerceiroSaved: 0.00,
+        feriasSaved: 0.00,
+        annualReserveHistory: [],
       };
       saveState(initialState);
       return initialState;
@@ -77,6 +83,12 @@ export function loadState(): AppState {
       keepOriginalGoalToggle: parsed.keepOriginalGoalToggle !== undefined ? parsed.keepOriginalGoalToggle : false,
       accumulatedGoalPendente: parsed.accumulatedGoalPendente !== undefined ? parsed.accumulatedGoalPendente : 0,
       goalAdjustments: parsed.goalAdjustments || [],
+      decimoTerceiroTotal: parsed.decimoTerceiroTotal !== undefined ? parsed.decimoTerceiroTotal : 1500.00,
+      feriasDias: parsed.feriasDias !== undefined ? parsed.feriasDias : 5,
+      feriasValorDiario: parsed.feriasValorDiario !== undefined ? parsed.feriasValorDiario : 120.00,
+      decimoTerceiroSaved: parsed.decimoTerceiroSaved !== undefined ? parsed.decimoTerceiroSaved : 0.00,
+      feriasSaved: parsed.feriasSaved !== undefined ? parsed.feriasSaved : 0.00,
+      annualReserveHistory: parsed.annualReserveHistory || [],
       widgetOptions: parsed.widgetOptions || {
         showMeta: true,
         showGanhos: true,

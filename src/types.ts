@@ -55,6 +55,15 @@ export interface GoalAdjustment {
   amount: number;
 }
 
+export interface ReserveHistoryEntry {
+  id: string;
+  date: string; // YYYY-MM-DD
+  type: 'deposit' | 'withdraw' | 'reset';
+  category: '13th' | 'vacation';
+  description: string;
+  amount: number;
+}
+
 export interface AppState {
   deliveries: Delivery[];
   expenses: Expense[];
@@ -68,6 +77,12 @@ export interface AppState {
   keepOriginalGoalToggle?: boolean;
   accumulatedGoalPendente?: number;
   goalAdjustments?: GoalAdjustment[];
+  decimoTerceiroTotal?: number;
+  feriasDias?: number;
+  feriasValorDiario?: number;
+  decimoTerceiroSaved?: number;
+  feriasSaved?: number;
+  annualReserveHistory?: ReserveHistoryEntry[];
   widgetOptions?: {
     showMeta?: boolean;
     showGanhos?: boolean;

@@ -5,7 +5,7 @@
 
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
-import { Settings, Save, Trash2, Calendar, DollarSign, RefreshCw, AlertTriangle, Plus, CheckCircle2, ChevronRight, Smartphone, Chrome, CalendarClock, Coffee, AlertCircle, Bell, BellRing } from 'lucide-react';
+import { Settings, Save, Trash2, Calendar, DollarSign, RefreshCw, AlertTriangle, Plus, CheckCircle2, ChevronRight, Smartphone, Chrome, CalendarClock, Coffee, AlertCircle, Bell, BellRing, PiggyBank, TrendingUp, Sparkles } from 'lucide-react';
 import { AppState, Expense, ExtraGoal } from '../types';
 import { isNotificationSupported, getNotificationPermission, requestNotificationPermission, triggerLocalNotification } from '../utils/notifications';
 import { CalendarModal } from './CalendarModal';
@@ -23,6 +23,7 @@ interface SettingsViewProps {
   updateTargetDivisionMode: (mode: 'equal' | 'concentrate') => void;
   toggleKeepOriginalGoal: (keep: boolean) => void;
   updateWidgetOptions: (options: AppState['widgetOptions']) => void;
+  updateAnnualReserveConfig: (decimoTotal: number, feriasDiasCount: number, feriasDiarioValue: number) => void;
 }
 
 export function SettingsView({
@@ -36,11 +37,19 @@ export function SettingsView({
   updateDayStatus,
   updateTargetDivisionMode,
   toggleKeepOriginalGoal,
-  updateWidgetOptions
+  updateWidgetOptions,
+  updateAnnualReserveConfig
 }: SettingsViewProps) {
   // Config state
   const [ifoodRate, setIfoodRate] = useState(state.config.ifoodValue.toString());
   const [quitaRate, setQuitaRate] = useState(state.config.quitaValue.toString());
+
+  // Annual Reserve configuration inputs
+  const [reserveDecimoTotal, setReserveDecimoTotal] = useState((state.decimoTerceiroTotal !== undefined ? state.decimoTerceiroTotal : 1500).toString());
+  const [reserveFeriasDias, setReserveFeriasDias] = useState((state.feriasDias !== undefined ? state.feriasDias : 5).toString());
+  const [reserveFeriasValorDiario, setReserveFeriasValorDiario] = useState((state.feriasValorDiario !== undefined ? state.feriasValorDiario : 120).toString());
+  const [isReserveConfigSaved, setIsReserveConfigSaved] = useState(false);
+  const [reserveConfigError, setReserveConfigError] = useState('');
   
   // Notification states
   const [notifSupported] = useState(() => isNotificationSupported());
@@ -195,6 +204,52 @@ export function SettingsView({
     setTimeout(() => setActionSuccess(''), 3000);
   };
 
+  const now = new Date();
+  const currentMonth = now.getMonth();
+  const monthsRemaining = Math.max(1, 12 - (currentMonth + 1) + 1);
+  const monthNames = [
+    'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+    'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
+  ];
+  const activeMonthsList = monthNames.slice(currentMonth).join(', ');
+
+  const uniqueDaysWithGanhosCount = Array.from(
+    new Set((state.deliveries || []).map(d => new Date(d.timestamp).toDateString()))
+  ).length;
+  const appAvgDailyEarnings = uniqueDaysWithGanhosCount > 0 
+    ? (state.deliveries.reduce((sum, d) => sum + d.value, 0) / uniqueDaysWithGanhosCount) 
+    : 120.00;
+
+  const handleSaveReserveConfig = (e: React.FormEvent) => {
+    e.preventDefault();
+    setActionError('');
+    setActionSuccess('');
+
+    const parsedDecimo = parseFloat(reserveDecimoTotal);
+    if (isNaN(parsedDecimo) || parsedDecimo < 0) {
+      setActionError('O valor total do décimo terceiro deve ser um número positivo.');
+      return;
+    }
+
+    const parsedDias = parseInt(reserveFeriasDias);
+    if (isNaN(parsedDias) || parsedDias < 0) {
+      setActionError('Os dias de férias devem ser um número inteiro positivo.');
+      return;
+    }
+
+    const parsedDiario = parseFloat(reserveFeriasValorDiario);
+    if (isNaN(parsedDiario) || parsedDiario < 0) {
+      setActionError('O valor diário de férias deve ser um número positivo.');
+      return;
+    }
+
+    updateAnnualReserveConfig(parsedDecimo, parsedDias, parsedDiario);
+    setActionSuccess('Configurações de reservas anuais salvas com sucesso! Os valores diários já estão somando automaticamente nas suas metas.');
+    setTimeout(() => setActionSuccess(''), 4500);
+  };
+
+
+
   // Start inline editing of an expense
   const startEditExpense = (exp: Expense) => {
     setEditingExpenseId(exp.id);
@@ -317,37 +372,180 @@ export function SettingsView({
         </form>
       </div>
 
+      {/* ⚙️ RESERVAS ANUAIS • FÉRIAS E DÉCIMO TERCEIRO */}
+      <div id="annual_reserves_settings_card" className="bg-gradient-to-br from-amber-500/10 via-white to-blue-500/10 rounded-3xl p-6 shadow-md border-2 border-amber-300 space-y-5">
+        <div className="flex items-center gap-2.5 pb-3 border-b border-amber-250">
+          <div className="bg-amber-500 text-white p-2 rounded-xl shrink-0 shadow-sm">
+            <PiggyBank size={20} className="text-white" />
+          </div>
+          <div>
+            <h2 className="font-extrabold text-slate-900 text-base font-display">⚙️ RESERVAS ANUAIS • FÉRIAS E DÉCIMO TERCEIRO</h2>
+            <p className="text-[11px] text-slate-500 font-medium">Cálculo proporcional de metas CLT para autônomos</p>
+          </div>
+        </div>
+
+        <div className="bg-amber-100/30 border border-amber-200/50 p-4 rounded-2xl text-xs text-slate-700 space-y-1.5">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-1 font-bold text-slate-800">
+            <span>📅 Mês atual até dezembro ({monthNames[currentMonth]} ~ Dezembro):</span>
+            <span className="bg-amber-500/20 text-amber-950 text-[10px] px-2.5 py-0.5 rounded-full font-black border border-amber-300/60 font-mono">
+              {monthsRemaining} {monthsRemaining === 1 ? 'mês' : 'meses'} restantes
+            </span>
+          </div>
+          <p className="text-[10px] text-slate-500 italic block">
+            {activeMonthsList}
+          </p>
+          <p className="text-[11px] text-slate-600 leading-relaxed font-sans font-medium">
+            Regra do app: O cálculo divide as metas pelos meses restantes até dezembro para embutir o valor diário de forma diluída e amigável na sua meta de pilotagem diária!
+          </p>
+        </div>
+
+        <form onSubmit={handleSaveReserveConfig} className="space-y-4">
+          <div className="space-y-5">
+            {/* Bloco Décimo Terceiro */}
+            <div className="bg-white/80 p-4 rounded-2xl border border-amber-200/60 shadow-xs space-y-3">
+              <span className="text-xs font-black text-amber-950 block uppercase tracking-wider">🔹 CONFIGURAÇÃO DO 13º SALÁRIO</span>
+              
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                <div>
+                  <label className="block text-[10px] font-extrabold text-slate-500 uppercase mb-1">
+                    Valor desejado de 13º salário (R$)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    placeholder="Ex: 1500.00"
+                    value={reserveDecimoTotal}
+                    onChange={(e) => setReserveDecimoTotal(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-250 focus:bg-white rounded-xl px-3 py-2.5 text-xs font-mono font-bold focus:outline-none focus:ring-2 focus:ring-amber-500 text-slate-800"
+                  />
+                </div>
+
+                <div className="bg-slate-50/50 p-3 rounded-xl border border-slate-100 flex flex-col justify-center">
+                  <span className="text-[10px] font-bold text-slate-400 block uppercase">CÁLCULO AUTOMÁTICO DO 13º</span>
+                  <div className="mt-1 space-y-1 font-mono text-[11px] text-slate-700 font-semibold">
+                    <div>Por Mês ({monthsRemaining} meses): <b className="text-slate-900">R$ {parseFloat(reserveDecimoTotal) ? (parseFloat(reserveDecimoTotal) / monthsRemaining).toFixed(2) : '0.00'}</b></div>
+                    <div>Soma na Meta Diária: <b className="text-amber-750 font-bold bg-amber-500/5 border border-amber-500/10 px-1 py-0.2 rounded-md">+ R$ {parseFloat(reserveDecimoTotal) ? (parseFloat(reserveDecimoTotal) / monthsRemaining / 30).toFixed(2) : '0.00'} / dia</b></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Bloco Férias */}
+            <div className="bg-white/80 p-4 rounded-2xl border border-blue-200/60 shadow-xs space-y-3">
+              <span className="text-xs font-black text-blue-950 block uppercase tracking-wider">🔹 CONFIGURAÇÃO DE FÉRIAS</span>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+                <div>
+                  <label className="block text-[10px] font-extrabold text-slate-500 uppercase mb-1">
+                    Dias de Férias a Reservar
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    placeholder="Ex: 5"
+                    value={reserveFeriasDias}
+                    onChange={(e) => setReserveFeriasDias(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-250 focus:bg-white rounded-xl px-3 py-2.5 text-xs font-mono font-bold focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-800"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-extrabold text-slate-500 uppercase mb-1">
+                    Valor Médio Ganho por Dia (R$)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    placeholder="Ex: 120.00"
+                    value={reserveFeriasValorDiario}
+                    onChange={(e) => setReserveFeriasValorDiario(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-250 focus:bg-white rounded-xl px-3 py-2.5 text-xs font-mono font-bold focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-800"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setReserveFeriasValorDiario(appAvgDailyEarnings.toFixed(2))}
+                    className="mt-1 text-[9px] text-blue-600 hover:text-blue-800 font-bold underline cursor-pointer truncate block max-w-full"
+                    title={`Média diária real do app baseada nos registros salvos`}
+                  >
+                     Usar média do app: R$ {appAvgDailyEarnings.toFixed(2)}
+                  </button>
+                </div>
+
+                <div className="bg-slate-50/50 p-3 rounded-xl border border-slate-100 flex flex-col justify-center">
+                  <span className="text-[10px] font-bold text-slate-400 block uppercase">CÁLCULO AUTOMÁTICO FÉRIAS</span>
+                  <div className="mt-1 space-y-1 font-mono text-[11px] text-slate-700 font-semibold">
+                    <div>Fundo Férias Total: <b className="text-slate-900">R$ {parseFloat(reserveFeriasDias) && parseFloat(reserveFeriasValorDiario) ? (parseInt(reserveFeriasDias) * parseFloat(reserveFeriasValorDiario)).toFixed(2) : '0.00'}</b></div>
+                    <div>Por Mês ({monthsRemaining} meses): <b className="text-slate-900 font-medium">R$ {parseFloat(reserveFeriasDias) && parseFloat(reserveFeriasValorDiario) ? ((parseInt(reserveFeriasDias) * parseFloat(reserveFeriasValorDiario)) / monthsRemaining).toFixed(2) : '0.00'}</b></div>
+                    <div>Soma na Meta Diária: <b className="text-blue-750 font-bold bg-blue-500/5 border border-blue-500/10 px-1 py-0.2 rounded-md">+ R$ {parseFloat(reserveFeriasDias) && parseFloat(reserveFeriasValorDiario) ? (((parseInt(reserveFeriasDias) * parseFloat(reserveFeriasValorDiario)) / monthsRemaining) / 30).toFixed(2) : '0.00'} / dia</b></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <button
+            type="submit"
+            className="w-full bg-amber-500 hover:bg-amber-600 active:scale-[0.99] hover:shadow-lg hover:shadow-amber-500/10 text-white font-extrabold text-sm py-3.5 rounded-xl cursor-pointer transition-all flex items-center justify-center gap-1.5 shadow-md shadow-amber-500/10"
+          >
+            💾 SALVAR CONFIGURAÇÃO DE RESERVAS ANUAIS
+          </button>
+        </form>
+      </div>
+
       {/* SECTION: DAY STATUS CALENDAR AND TARGET AUTORECALCULATE CONFIGS */}
       {(() => {
         // Math for calendar summary
         const totalDespesas = state.expenses.reduce((sum, exp) => sum + exp.value, 0);
         const totalObjetivosExtras = state.extraGoals.reduce((sum, goal) => sum + goal.targetValue, 0);
-        const metaTotal = totalDespesas + totalObjetivosExtras;
+        
+        const now = new Date();
+        const currentYear = now.getFullYear();
+        const currentMonth = now.getMonth();
+        const currentMonthStr = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}`;
+        const monthsRemaining = Math.max(1, 12 - (currentMonth + 1) + 1);
+
+        const decimoTotal = state.decimoTerceiroTotal !== undefined ? state.decimoTerceiroTotal : 1500.00;
+        const decimoMensal = decimoTotal / monthsRemaining;
+        const decimoDaily = decimoMensal / 30;
+
+        const feriasDiasCount = state.feriasDias !== undefined ? state.feriasDias : 5;
+        const feriasValDiario = state.feriasValorDiario !== undefined ? state.feriasValorDiario : 120.00;
+        const feriasTotalVal = feriasDiasCount * feriasValDiario;
+        const feriasMensalVal = feriasTotalVal / monthsRemaining;
+        const feriasDailyVal = feriasMensalVal / 30;
+
+        // Meta Total includes expenses + extra goals + vacation + 13th salary for the remaining months
+        const metaTotal = totalDespesas + totalObjetivosExtras + (decimoMensal * monthsRemaining) + (feriasMensalVal * monthsRemaining);
 
         const baseDailyTarget = totalDespesas / 30;
         const extraDailyTarget = state.extraGoals.reduce((sum, goal) => {
           return sum + (goal.targetValue / Math.max(1, goal.daysLimit));
         }, 0);
-        const totalDailyTargetOriginal = baseDailyTarget + extraDailyTarget;
-
-        const now = new Date();
-        const currentYear = now.getFullYear();
-        const currentMonth = now.getMonth();
-        const currentMonthStr = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}`;
+        
+        // Unadjusted total daily target including reserves
+        const totalDailyTargetOriginal = baseDailyTarget + extraDailyTarget + decimoDaily + feriasDailyVal;
 
         const currentMonthRegs = (state.dayRegistrations || []).filter(reg => reg.date.startsWith(currentMonthStr));
         const offDaysCount = currentMonthRegs.filter(reg => reg.status === 'folga' || reg.status === 'falta').length;
         const workDaysCount = Math.max(1, 30 - offDaysCount);
 
-        // Adjusted daily target
+        // Adjusted daily target including reserves
         let targetPerUsefulDay = totalDailyTargetOriginal;
+        let diffMultiplier = 1;
         if (!state.keepOriginalGoalToggle) {
           if (state.targetDivisionMode === 'concentrate') {
-            targetPerUsefulDay = (totalDailyTargetOriginal * 30 / workDaysCount) * 1.25;
+            diffMultiplier = (30 / workDaysCount) * 1.25;
           } else {
-            targetPerUsefulDay = totalDailyTargetOriginal * 30 / workDaysCount;
+            diffMultiplier = 30 / workDaysCount;
           }
+          targetPerUsefulDay = totalDailyTargetOriginal * diffMultiplier;
         }
+
+        const decimoDailyAdjusted = decimoDaily * diffMultiplier;
+        const feriasDailyAdjusted = feriasDailyVal * diffMultiplier;
+        const baseDailyAdjusted = (baseDailyTarget + extraDailyTarget) * diffMultiplier;
 
         return (
           <div id="target_recalculate_settings" className="bg-white rounded-3xl p-6 shadow-xs border border-slate-100 space-y-5">
@@ -394,8 +592,8 @@ export function SettingsView({
               </div>
 
               <div className="bg-white p-3 rounded-xl border border-slate-100 min-w-0">
-                <span className="text-[10px] font-bold text-slate-400 uppercase block truncate">Meta Total</span>
-                <span className="text-xs font-extrabold text-slate-800 block mt-2 truncate" title={`R$ ${metaTotal.toFixed(2)}`}>
+                <span className="text-[10px] font-bold text-slate-400 uppercase block truncate">Meta Total c/ Reservas</span>
+                <span className="text-xs font-black text-slate-900 block mt-2 truncate" title={`R$ ${metaTotal.toFixed(2)}`}>
                   R$ {metaTotal.toFixed(2)}
                 </span>
               </div>
@@ -406,6 +604,57 @@ export function SettingsView({
                   R$ {targetPerUsefulDay.toFixed(2)}
                 </span>
               </div>
+            </div>
+
+            {/* RESERVES CONFIRMATION BLUEPRINT BOX */}
+            <div className="bg-slate-50/60 rounded-2xl p-4 border border-slate-150 space-y-2.5">
+              <span className="text-[11px] font-extrabold uppercase text-slate-600 tracking-wider flex items-center gap-1.5">
+                <PiggyBank size={14} className="text-indigo-600" /> Detalhamento das Reservas na Confirmação da Meta
+              </span>
+              <p className="text-[11px] text-slate-500 leading-relaxed font-medium">
+                Sua meta diária original final de <strong className="text-slate-700">R$ {totalDailyTargetOriginal.toFixed(2)}/dia</strong> é a soma da sua base operacional com as suas reservas CLT autopreparadas:
+              </p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs font-mono">
+                <div className="bg-white p-2.5 rounded-xl border border-slate-100 space-y-1">
+                  <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Metas de Custeio Fixo e Extras</div>
+                  <div className="flex justify-between font-bold text-slate-750">
+                    <span>Meta de despesas:</span>
+                    <span>R$ {baseDailyTarget.toFixed(2)}/dia</span>
+                  </div>
+                  <div className="flex justify-between font-bold text-slate-750">
+                    <span>Objetivos Extras:</span>
+                    <span>R$ {extraDailyTarget.toFixed(2)}/dia</span>
+                  </div>
+                </div>
+
+                <div className="bg-indigo-50/40 p-2.5 rounded-xl border border-indigo-100 space-y-1">
+                  <div className="text-[10px] font-black text-indigo-700 uppercase tracking-wider">Acréscimo de Reservas CLT</div>
+                  <div className="flex justify-between font-bold text-blue-800">
+                    <span>Proporcional 13º Salário:</span>
+                    <span>+ R$ {decimoDaily.toFixed(2)}/dia</span>
+                  </div>
+                  <div className="flex justify-between font-bold text-amber-800">
+                    <span>Proporcional Férias:</span>
+                    <span>+ R$ {feriasDailyVal.toFixed(2)}/dia</span>
+                  </div>
+                </div>
+              </div>
+
+              {!state.keepOriginalGoalToggle && offDaysCount > 0 && (
+                <div className="pt-2 border-t border-dashed border-slate-200">
+                  <div className="bg-amber-500/5 text-amber-900 px-3 py-2 rounded-xl text-[11px] border border-amber-500/10 flex flex-col gap-1 font-medium">
+                    <span className="font-extrabold flex items-center gap-1">⚡ CALENDÁRIO ATIVO: Incremento Ajustado por Folgas ({offDaysCount} dias de repouso)</span>
+                    <p className="leading-relaxed opacity-90">
+                      Como você registrou dias de folga/falta, a meta diária foi recalculada de <span className="font-bold">R$ {totalDailyTargetOriginal.toFixed(2)}</span> para <strong className="font-extrabold text-amber-600">R$ {targetPerUsefulDay.toFixed(2)} / dia útil</strong>.
+                    </p>
+                    <div className="font-mono text-[10px] text-slate-650 mt-1 grid grid-cols-3 gap-2">
+                      <div>Base + Extras útil: <strong>R$ {baseDailyAdjusted.toFixed(2)}</strong></div>
+                      <div>13º útil: <strong className="text-blue-700">R$ {decimoDailyAdjusted.toFixed(2)}</strong></div>
+                      <div>Férias útil: <strong className="text-amber-700">R$ {feriasDailyAdjusted.toFixed(2)}</strong></div>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* 3. EXTRA CONFIGURATIONS */}

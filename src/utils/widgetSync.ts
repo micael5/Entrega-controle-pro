@@ -16,7 +16,6 @@ export function transmitWidgetData(state: AppState): void {
     const extraDailyTarget = state.extraGoals.reduce((sum, goal) => {
       return sum + (goal.targetValue / Math.max(1, goal.daysLimit));
     }, 0);
-    const totalDailyTarget = baseDailyTarget + extraDailyTarget;
 
     // Date calculations
     const now = new Date();
@@ -28,6 +27,21 @@ export function transmitWidgetData(state: AppState): void {
     const offDays = currentMonthRegs.filter(reg => reg.status === 'folga' || reg.status === 'falta');
     const numOffDays = offDays.length;
     const numWorkDays = Math.max(1, 30 - numOffDays);
+
+    // Dynamic reserves target calculation
+    const monthsRemaining = Math.max(1, 12 - (currentMonth + 1) + 1);
+
+    const decimoTerceiroTotal = state.decimoTerceiroTotal !== undefined ? state.decimoTerceiroTotal : 1500.00;
+    const decimoTerceiroMensal = decimoTerceiroTotal / monthsRemaining;
+    const decimoTerceiroUnadjustedDaily = decimoTerceiroMensal / 30;
+
+    const feriasDias = state.feriasDias !== undefined ? state.feriasDias : 5;
+    const feriasValorDiario = state.feriasValorDiario !== undefined ? state.feriasValorDiario : 120.00;
+    const feriasTotal = feriasDias * feriasValorDiario;
+    const feriasMensal = feriasTotal / monthsRemaining;
+    const feriasUnadjustedDaily = feriasMensal / 30;
+
+    const totalDailyTarget = baseDailyTarget + extraDailyTarget + decimoTerceiroUnadjustedDaily + feriasUnadjustedDaily;
 
     const todayStrDate = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
     const todayReg = (state.dayRegistrations || []).find(reg => reg.date === todayStrDate);
